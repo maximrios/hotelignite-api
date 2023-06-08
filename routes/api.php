@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\AccommodationController;
 use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\TourController;
 use App\Http\Controllers\Api\V1\TravelAgencyController;
+use App\Http\Controllers\Api\V1\UserAuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -35,3 +36,5 @@ Route::middleware('client')->group(function () {
     Route::put('booking', [BookingController::class, 'update'])->name('bookings.update');
     Route::get('booking', [BookingController::class, 'show'])->name('bookings.show');
 });
+
+Route::post('/login', [UserAuthController::class, 'login']);

@@ -15,19 +15,26 @@ class AccommodationRespository implements AccommodationInterface
     public function all(Request $request)
     {
         //$request->city = ($request->city) ? $request->city:0;
-        $request->limit = ($request->limit) ? $request->limit:10;
-        $request->offset = ($request->offset) ? $request->offset:0;
+        $limit = ($request->limit) ? $request->limit:10;
+        $offset = ($request->offset) ? $request->offset:0;
+        $type = ($request->type) ? $request->type:0;
 
         $accommodations = Accommodation::has('images')
                             ->when($request->city, function($q, $city) {
                                 return $q->where('city_id', $city);
                             })
-                            ->when($request->type, function($q, $type) {
+                            ->when($type, function($q, $type) {
+                                if($type == 1) {
+                                    //all stars types
+                                    $hotelTypes = [1,2,3,4,5];
+                                    return $q->whereIn('type_id', $hotelTypes);
+                                }
                                 return $q->where('type_id', $type);
                             })
-                            ->offset($request->offset)
-                            ->limit($request->limit)
+                            ->offset($offset)
+                            ->limit($limit)
                             ->get();
+        //dd($accommodations->toSql());
         return new AccommodationResourceCollection($accommodations);
     }
     public function find($id)
