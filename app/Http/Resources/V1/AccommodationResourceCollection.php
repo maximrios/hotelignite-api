@@ -6,7 +6,7 @@ use Illuminate\Http\Resources\Json\ResourceCollection;
 
 class AccommodationResourceCollection extends ResourceCollection
 {
-    
+
     public $collects = AccommodationResource::class;
 
     public function toArray($request)
