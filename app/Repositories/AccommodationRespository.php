@@ -15,9 +15,9 @@ class AccommodationRespository implements AccommodationInterface
     public function all(Request $request)
     {
         //$request->city = ($request->city) ? $request->city:0;
-        $limit = ($request->limit) ? $request->limit:10;
-        $offset = ($request->offset) ? $request->offset:0;
-        $type = ($request->type) ? $request->type:0;
+        $limit = ($request->limit) ? $request->limit : 10;
+        $offset = ($request->offset) ? $request->offset : 0;
+        $type = ($request->type) ? $request->type : 0;
 
         $accommodations = Accommodation::has('images')
                             ->when($request->city, function($q, $city) {
@@ -41,5 +41,30 @@ class AccommodationRespository implements AccommodationInterface
     {
         $accommodation = Accommodation::find($id);
         return new AccommodationResource($accommodation);
+    }
+
+    public function search($request)
+    {
+        $limit = ($request->limit) ? $request->limit : 10;
+        $offset = ($request->offset) ? $request->offset : 0;
+        $type = ($request->type) ? $request->type : 0;
+        $city = ($request->city) ? $request->city : 0;
+
+        $accommodations = Accommodation::when($city, function ($q, $city) {
+                                return $q->where('city_id', $city);
+                            })
+                            ->when($type, function ($q, $type) {
+                                if ($type == 1) {
+                                    //all stars types
+                                    $hotelTypes = [1,2,3,4,5];
+                                    return $q->whereIn('type_id', $hotelTypes);
+                                }
+                                return $q->where('type_id', $type);
+                            })
+                            ->offset($offset)
+                            ->limit($limit)
+                            ->get();
+
+        return new AccommodationResourceCollection($accommodations);
     }
 }

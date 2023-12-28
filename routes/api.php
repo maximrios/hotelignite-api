@@ -32,9 +32,10 @@ Route::middleware('client')->group(function () {
     Route::get('tours', [TourController::class, 'index'])->name('tours.index');
     Route::get('tour', [TourController::class, 'show'])->name('tours.show');
 
-    Route::post('booking', [BookingController::class, 'store'])->name('bookings.store');
-    Route::put('booking', [BookingController::class, 'update'])->name('bookings.update');
-    Route::get('booking', [BookingController::class, 'show'])->name('bookings.show');
+    Route::post('booking', [BookingController::class, 'store'])->name('booking.store');
+    Route::put('booking', [BookingController::class, 'update'])->name('booking.update');
+    Route::get('booking', [BookingController::class, 'show'])->name('booking.show');
+
 });
 
 Route::post('/login', [UserAuthController::class, 'login']);

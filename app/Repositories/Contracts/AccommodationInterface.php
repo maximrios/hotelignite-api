@@ -10,4 +10,5 @@ interface AccommodationInterface
 {
     public function all(Request $request);
     public function find($id);
+    public function search($request);
 }

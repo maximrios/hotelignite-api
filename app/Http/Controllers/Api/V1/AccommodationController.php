@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Requests\SearchAccommodationRequest;
 use Illuminate\Http\Request;
 use App\Models\Accommodation;
 use Illuminate\Http\JsonResponse;
@@ -21,9 +22,10 @@ class AccommodationController extends BaseController
         $this->accommodationInterface = $accommodationInterface;
     }
 
-    public function index(Request $request)
+    public function index(SearchAccommodationRequest $request)
     {
-        return AccommodationResource::collection(Accommodation::paginate(12));
+        $accommodations = $this->accommodationInterface->search($request);
+        return response()->json($accommodations, 200);
     }
 
     public function show(Request $request)
