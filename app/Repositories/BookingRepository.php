@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use App\Http\Requests\BookingRequest;
 use App\Http\Resources\V1\TourResource;
 use App\Http\Resources\V1\BookingResource;
+use App\Http\Resources\V1\BookingResourceCollection;
 use App\Http\Resources\V1\ReservationResource;
 use App\Repositories\Contracts\BookingInterface;
 use App\Http\Resources\V1\TourResourceCollection;
@@ -18,8 +19,8 @@ class BookingRepository implements BookingInterface
 {
     public function all(Request $request)
     {
-        $tours = Booking::all();
-        return new TourResourceCollection($tours);
+        $bookings = Booking::all();
+        return new BookingResourceCollection($bookings);
     }
     public function find($id)
     {

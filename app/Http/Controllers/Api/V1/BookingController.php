@@ -18,6 +18,12 @@ class BookingController extends BaseController
     {
         $this->bookingInterface = $bookingInterface;
     }
+
+    public function index(Request $request)
+    {
+        $bookings = $this->bookingInterface->all($request);
+        return response()->json($bookings, 200);
+    }
     
     public function store(StoreBookingRequest $request)
     {

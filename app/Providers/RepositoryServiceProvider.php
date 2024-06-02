@@ -11,6 +11,8 @@ use App\Repositories\AccommodationRespository;
 use App\Repositories\Contracts\BookingInterface;
 use App\Repositories\Contracts\TravelAgencyInterface;
 use App\Repositories\Contracts\AccommodationInterface;
+use App\Repositories\Contracts\ReservationInterface;
+use App\Repositories\ReservationRepository;
 
 class RepositoryServiceProvider extends ServiceProvider
 {
@@ -25,6 +27,7 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(TravelAgencyInterface::class, TravelAgencyRespository::class);
         $this->app->bind(TourInterface::class, TourRepository::class);
         $this->app->bind(BookingInterface::class, BookingRepository::class);
+        $this->app->bind(ReservationInterface::class, ReservationRepository::class);
     }
 
     /**

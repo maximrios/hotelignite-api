@@ -5,12 +5,10 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\SearchAccommodationRequest;
 use Illuminate\Http\Request;
 use App\Models\Accommodation;
-use Illuminate\Http\JsonResponse;
 use App\Http\Requests\StoreAccommodationRequest;
 use App\Http\Resources\V1\AccommodationResource;
 use Illuminate\Routing\Controller as BaseController;
 use App\Repositories\Contracts\AccommodationInterface;
-use App\Http\Resources\V1\AccommodationResourceCollection;
 
 class AccommodationController extends BaseController
 {

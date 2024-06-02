@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class UserAuthController extends Controller
 {
@@ -15,14 +15,13 @@ class UserAuthController extends Controller
             'password' => 'required'
         ]);
 
-        if (!auth()->attempt($data)) {
-            return response(['error_message' => 'Incorrect Details. 
-            Please try again']);
+        if (!Auth::attempt($data)) {
+            return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        $token = auth()->user()->createToken('API Token')->accessToken;
+        $token = Auth::user()->createToken('api_token')->plainTextToken;
 
-        return response(['user' => auth()->user(), 'token' => $token]);
+        return response(['token' => $token, 'token_type' => 'Bearer']);
     }
 
 }
