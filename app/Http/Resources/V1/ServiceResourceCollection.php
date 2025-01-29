@@ -4,10 +4,10 @@ namespace App\Http\Resources\V1;
 
 use Illuminate\Http\Resources\Json\ResourceCollection;
 
-class AccommodationResourceCollection extends ResourceCollection
+class ServiceResourceCollection extends ResourceCollection
 {
 
-    public $collects = AccommodationResource::class;
+    public $collects = ServiceResource::class;
 
     public function toArray($request)
     {
@@ -20,6 +20,5 @@ class AccommodationResourceCollection extends ResourceCollection
                 'last_page' => $this->lastPage(),
             ],
         ];
-        //return ['data' => $this->collection];
     }
 }

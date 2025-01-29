@@ -9,7 +9,7 @@ class AccommodationType extends Model
     //
     public function accommodations()
     {
-        return $this->hasMany(Accommodation::class);
+        return $this->hasMany(Accommodation::class, 'type_id', 'id');
     }
 
 }

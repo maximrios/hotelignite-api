@@ -22,7 +22,7 @@ class ReservationRepository implements ReservationInterface
 {
     public function all(Request $request)
     {
-        $reservations = Reservation::all();
+        $reservations = Reservation::orderBy('id', 'desc')->paginate();
         return new ReservationResourceCollection($reservations);
     }
 }

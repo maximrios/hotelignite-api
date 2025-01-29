@@ -4,9 +4,9 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class SearchAccommodationRequest extends FormRequest
+class GetAccommodationRequest extends FormRequest
 {
-    
+
     public function authorize()
     {
         return true;
@@ -15,8 +15,7 @@ class SearchAccommodationRequest extends FormRequest
     public function rules()
     {
         return [
-            'type' => ['sometimes'],
-            'city' => ['sometimes'],
+            'accommodation_id' => ['required', 'integer', 'exists:accommodations,id'],
         ];
     }
 }
