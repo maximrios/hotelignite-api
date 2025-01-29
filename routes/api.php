@@ -33,7 +33,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 Route::get('v1/channels', [ChannelController::class, 'index'])->name('channels.index');
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::prefix('v1')->group(function () {
         Route::get('accommodations', [AccommodationController::class, 'index'])->name('accommodations.index');
         //Route::get('accommodation', [AccommodationController::class, 'show'])->name('accommodations.show');
