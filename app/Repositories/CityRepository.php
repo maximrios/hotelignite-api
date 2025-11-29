@@ -13,7 +13,9 @@ class CityRepository implements CityInterface
 {
     public function all(Request $request)
     {
-        $cities = City::orderBy('name')->paginate();
+        $cities = City::where('enabled', 1)
+            ->orderBy('name')
+            ->paginate();
         return new CityResourceCollection($cities);
     }
 }

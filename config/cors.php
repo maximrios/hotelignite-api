@@ -21,7 +21,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['https://turinorte.ar'],
+    'allowed_origins' => ['https://turinorte.ar', 'http://localhost:3000'],
 
     'allowed_origins_patterns' => [],
 

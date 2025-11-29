@@ -28,6 +28,7 @@ class AccommodationResource extends JsonResource
             'description' => ($this->descriptions()->count() > 0) ?
                 $this->descriptions()->where('language_id', 'es')->first()->description : null,
             'rooms' => new RoomTypeResourceCollection($this->roomTypes),
+            'policies' => $this->policies,
         ];
     }
 }

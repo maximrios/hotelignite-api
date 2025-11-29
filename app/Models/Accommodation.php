@@ -41,4 +41,16 @@ class Accommodation extends Model
     {
         return $this->belongsTo(City::class);
     }
+
+    public function policies()
+    {
+        return $this->belongsToMany(Policy::class, AccommodationPolicy::class, 'accommodation_id', 'policy_id')
+            ->withPivot('language_id', 'description')
+            ->withTimestamps();
+    }
+
+    public function accommodationPolicies()
+    {
+        return $this->hasMany(AccommodationPolicy::class);
+    }
 }

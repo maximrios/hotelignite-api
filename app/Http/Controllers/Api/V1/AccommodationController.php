@@ -15,7 +15,6 @@ use App\Repositories\Contracts\AccommodationInterface;
 
 class AccommodationController extends BaseController
 {
-
     protected AccommodationInterface $accommodationInterface;
 
     public function __construct(AccommodationInterface $accommodationInterface)
@@ -33,6 +32,18 @@ class AccommodationController extends BaseController
     public function show($slug)
     {
         $accommodation = Accommodation::where('slug', $slug)
+            ->with([
+                'type',
+                'state',
+                'city',
+                'images',
+                'services',
+                'descriptions',
+                'roomTypes.category',
+                'roomTypes.images',
+                'accommodationPolicies.policy',
+                'accommodationPolicies.language'
+            ])
             ->first();
         return new AccommodationResource($accommodation);
     }

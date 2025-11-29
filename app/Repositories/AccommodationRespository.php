@@ -53,14 +53,18 @@ class AccommodationRespository implements AccommodationInterface
         $offset = ($request->offset) ? $request->offset : 0;
         $type = ($request->type) ? $request->type : 0;
         $city = ($request->city) ? $request->city : 0;
+        $q = ($request->q) ? $request->q : '';
 
-        $accommodations = Accommodation::when($city, function ($q, $city) {
-                                return $q->where('city_id', $city);
+        $accommodations = Accommodation::when($city, function ($query, $city) {
+                                return $query->where('city_id', $city);
                             })
-                            ->when($type, function ($q, $type) {
+                            ->when($type, function ($query, $type) {
                                 $slugs = explode(',', strtolower($type));
                                 $ids = AccommodationType::whereIn('slug', $slugs)->pluck('id');
-                                return $q->whereIn('type_id', $ids);
+                                return $query->whereIn('type_id', $ids);
+                            })
+                            ->when($q, function ($query, $q) {
+                                return $query->where('name', 'like', '%' . $q . '%');
                             })
                             //->offset($offset)
                             //->limit($limit)
