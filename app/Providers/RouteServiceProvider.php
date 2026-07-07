@@ -56,5 +56,16 @@ class RouteServiceProvider extends ServiceProvider
                 ], 429);
             });
         });
+
+        // Login: límite estricto anti-fuerza-bruta, por email + IP.
+        RateLimiter::for('login', function (Request $request) {
+            $key = strtolower((string) $request->input('email')).'|'.$request->ip();
+
+            return Limit::perMinute(5)->by($key)->response(function () {
+                return response()->json([
+                    'message' => 'Demasiados intentos de login. Probá de nuevo en un minuto.',
+                ], 429);
+            });
+        });
     }
 }

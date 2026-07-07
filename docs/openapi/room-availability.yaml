@@ -1,0 +1,111 @@
+collection:
+  get:
+    tags: [Room Availability]
+    summary: Listar disponibilidad
+    parameters:
+      - name: room_type_id
+        in: query
+        schema: { type: integer }
+      - name: date_from
+        in: query
+        schema: { type: string, format: date, example: '2026-06-01' }
+      - name: date_to
+        in: query
+        schema: { type: string, format: date, example: '2026-06-30' }
+      - name: limit
+        in: query
+        description: Default 30. Máximo 366.
+        schema: { type: integer, default: 30, maximum: 366 }
+      - $ref: '#/components/parameters/OffsetParam'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomAvailabilityCollection'
+
+  post:
+    tags: [Room Availability]
+    summary: |
+      Crear/actualizar disponibilidad por rango de fechas (upsert bulk).
+      Genera un registro por cada día del rango. Si ya existe, lo sobreescribe.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreRoomAvailabilityRequest'
+          example:
+            room_type_id: 1
+            date_from: "2026-07-01"
+            date_to: "2026-07-31"
+            available: 5
+            total: 6
+            closed: false
+            closed_to_arrival: false
+            closed_to_departure: false
+    responses:
+      '201':
+        description: Disponibilidad creada/actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomAvailabilityCollection'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Room Availability]
+    summary: Eliminar registro de disponibilidad
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_availability_id]
+            properties:
+              room_availability_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletedRoomAvailabilityResponse'
+
+item:
+  get:
+    tags: [Room Availability]
+    summary: Obtener registro de disponibilidad
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomAvailabilityResource'
+
+  put:
+    tags: [Room Availability]
+    summary: Actualizar registro de disponibilidad individual
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRoomAvailabilityRequest'
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomAvailabilityResource'

@@ -24,13 +24,14 @@ class StoreBookingRequest extends FormRequest
     public function rules()
     {
         return [
-            'accommodation_id' => ['sometimes'],
-            'room_id' => ['sometimes'],
-            'tour_id' => ['sometimes'],
-            'adults' => ['required'],
-            'childrens' => ['required'],
-            'checkin' => ['required'],
-            'checkout' => ['sometimes'],
+            'accommodation_id'   => ['sometimes'],
+            'room_id'            => ['sometimes'],
+            'tour_id'            => ['sometimes'],
+            'adults'             => ['required', 'integer', 'min:1'],
+            'childrens'          => ['required', 'integer', 'min:0'],
+            'checkin'            => ['required', 'date_format:Y-m-d'],
+            'checkout'           => ['sometimes', 'date_format:Y-m-d', 'after:checkin'],
+            'availability_token' => ['required', 'uuid'],
         ];
     }
 }

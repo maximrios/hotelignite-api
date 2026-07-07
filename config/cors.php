@@ -15,15 +15,19 @@ return [
     |
     */
 
-    //'paths' => ['api/*', 'sanctum/csrf-cookie'],
-    //'paths' => ['api/*', 'pms/*'],
-    'paths' => ['*'],
+    'paths' => ['api/*', 'pms/*', 'sanctum/csrf-cookie'],
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['https://turinorte.ar'],
+    // Orígenes permitidos desde env (coma-separado). No hardcodear localhost en prod.
+    'allowed_origins' => array_values(array_filter(array_map(
+        'trim',
+        explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3000'))
+    ))),
 
-    'allowed_origins_patterns' => [],
+    'allowed_origins_patterns' => array_filter(
+        explode(',', env('CORS_ALLOWED_ORIGIN_PATTERNS', ''))
+    ),
 
     'allowed_headers' => ['*'],
 

@@ -9,13 +9,37 @@ class Booking extends Model
 {
     use HasUuids;
 
-    public function accommodation() {
-        return $this->hasOne(Accommodation::class, 'id', 'accommodation_id');
+    protected $fillable = [
+        'accommodation_id',
+        'room_id',
+        'tour_id',
+        'checkin',
+        'checkout',
+        'adults',
+        'childrens',
+        'name',
+        'lastname',
+        'email',
+        'phone',
+    ];
+
+    protected $casts = [
+        'checkin'  => 'date',
+        'checkout' => 'date',
+    ];
+
+    public function accommodation()
+    {
+        return $this->belongsTo(Accommodation::class);
     }
 
-    public function tour() {
-        return $this->hasOne(Tour::class, 'id', 'tour_id');
+    public function room()
+    {
+        return $this->belongsTo(Room::class);
     }
 
-    
+    public function tour()
+    {
+        return $this->belongsTo(Tour::class);
+    }
 }

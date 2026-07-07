@@ -1,0 +1,289 @@
+collection:
+  get:
+    tags: [Accommodation Policies]
+    summary: Listar políticas de alojamiento
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: accommodation_id
+        in: query
+        schema: { type: integer }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyCollection'
+
+  post:
+    tags: [Accommodation Policies]
+    summary: Crear política de alojamiento
+    description: Única por alojamiento (unique accommodation_id).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreAccommodationPolicyRequest'
+    responses:
+      '201':
+        description: Creada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyResponse'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Accommodation Policies]
+    summary: Eliminar política de alojamiento
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accommodation_policy_id]
+            properties:
+              accommodation_policy_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyResponse'
+
+item:
+  get:
+    tags: [Accommodation Policies]
+    summary: Obtener política de alojamiento
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyResource'
+
+  put:
+    tags: [Accommodation Policies]
+    summary: Actualizar política de alojamiento
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateAccommodationPolicyRequest'
+    responses:
+      '200':
+        description: Actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyResponse'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+translations-collection:
+  get:
+    tags: [Accommodation Policy Translations]
+    summary: Listar traducciones de políticas
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: policy_id
+        in: query
+        schema: { type: integer }
+      - name: language_id
+        in: query
+        schema: { type: integer }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyTranslationCollection'
+
+  post:
+    tags: [Accommodation Policy Translations]
+    summary: Crear traducción de política
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreAccommodationPolicyTranslationRequest'
+    responses:
+      '201':
+        description: Creada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyTranslationResponse'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Accommodation Policy Translations]
+    summary: Eliminar traducción de política
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accommodation_policy_translation_id]
+            properties:
+              accommodation_policy_translation_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyTranslationResponse'
+
+translations-item:
+  get:
+    tags: [Accommodation Policy Translations]
+    summary: Obtener traducción de política
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyTranslationResource'
+
+  put:
+    tags: [Accommodation Policy Translations]
+    summary: Actualizar traducción de política
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateAccommodationPolicyTranslationRequest'
+    responses:
+      '200':
+        description: Actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationPolicyTranslationResponse'
+
+rate-policies-collection:
+  get:
+    tags: [Accommodation Rate Policies]
+    summary: Listar políticas de tarifas
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: accommodation_id
+        in: query
+        schema: { type: integer }
+      - name: rate_type
+        in: query
+        schema:
+          type: string
+          enum: [flexible, semi_flexible, non_refundable]
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationRatePolicyCollection'
+
+  post:
+    tags: [Accommodation Rate Policies]
+    summary: Crear política de tarifa
+    description: Única por alojamiento + rate_type.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreAccommodationRatePolicyRequest'
+    responses:
+      '201':
+        description: Creada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationRatePolicyResponse'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Accommodation Rate Policies]
+    summary: Eliminar política de tarifa
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accommodation_rate_policy_id]
+            properties:
+              accommodation_rate_policy_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationRatePolicyResponse'
+
+rate-policies-item:
+  get:
+    tags: [Accommodation Rate Policies]
+    summary: Obtener política de tarifa
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationRatePolicyResource'
+
+  put:
+    tags: [Accommodation Rate Policies]
+    summary: Actualizar política de tarifa
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateAccommodationRatePolicyRequest'
+    responses:
+      '200':
+        description: Actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationRatePolicyResponse'
+      '422':
+        $ref: '#/components/responses/ValidationError'

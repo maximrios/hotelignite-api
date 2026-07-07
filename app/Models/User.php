@@ -14,6 +14,10 @@ class User extends Authenticatable
     use HasFactory;
     use Notifiable;
 
+    public const TYPE_ACCOUNT = 'account';
+    public const TYPE_CLIENT = 'client';
+    public const TYPE_PLATFORM = 'platform';
+
     /**
      * The attributes that are mass assignable.
      *
@@ -23,6 +27,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'user_type',
+        'account_id',
+        'client_id',
     ];
 
     /**
@@ -43,4 +50,29 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    public function account()
+    {
+        return $this->belongsTo(Account::class);
+    }
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    public function isPlatform(): bool
+    {
+        return $this->user_type === self::TYPE_PLATFORM;
+    }
+
+    public function isAccount(): bool
+    {
+        return $this->user_type === self::TYPE_ACCOUNT;
+    }
+
+    public function isClient(): bool
+    {
+        return $this->user_type === self::TYPE_CLIENT;
+    }
 }

@@ -9,4 +9,6 @@ use Illuminate\Http\Request;
 interface CityInterface
 {
     public function all(Request $request);
+
+    public function show(string $slug): mixed;
 }

@@ -35,6 +35,7 @@ class AccommodationRespository implements AccommodationInterface
                                 }
                                 return $q->where('type_id', $type);
                             })
+                            
                             ->offset($offset)
                             ->limit($limit)
                             ->get();
@@ -43,7 +44,7 @@ class AccommodationRespository implements AccommodationInterface
     }
     public function find($id)
     {
-        $accommodation = Accommodation::find($id);
+        $accommodation = Accommodation::with('plan.features')->find($id);
         return new AccommodationResource($accommodation);
     }
 
@@ -62,9 +63,13 @@ class AccommodationRespository implements AccommodationInterface
                                 $ids = AccommodationType::whereIn('slug', $slugs)->pluck('id');
                                 return $q->whereIn('type_id', $ids);
                             })
-                            //->offset($offset)
-                            //->limit($limit)
-                            ->paginate();
+                            ->when($request->search, function ($q, $search) {
+                                return $q->where('name', 'like', "%{$search}%");
+                            })
+                            ->when(!$request->has('show_all'), function ($q) {
+                                return $q->where('enabled', 1);
+                            })
+                            ->paginate($limit);
 
         return new AccommodationResourceCollection($accommodations);
     }

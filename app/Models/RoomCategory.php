@@ -6,9 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class RoomCategory extends Model
 {
-    //
-    public function type()
+    public function roomTypes()
     {
-        return $this->belongsTo(RoomType::class);
+        return $this->hasMany(RoomType::class, 'category_id');
     }
 }

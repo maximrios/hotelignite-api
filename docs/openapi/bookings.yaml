@@ -1,0 +1,137 @@
+booking:
+  post:
+    tags: [Bookings]
+    summary: Crear pre-reserva (paso 1 de 2)
+    description: |
+      Inicia el flujo de reserva. Requiere un `availability_token` válido obtenido
+      previamente de `GET /accommodations/{id}/availability`. El token es de un solo
+      uso y expira en minutos — si falla, el cliente debe verificar disponibilidad nuevamente.
+
+      El objeto resultante tiene UUID como `id`. En el paso 2 (`PUT /booking`) se
+      completan los datos del huésped.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreBookingRequest'
+          example:
+            availability_token: "550e8400-e29b-41d4-a716-446655440000"
+            accommodation_id: 1
+            room_id: 3
+            adults: 2
+            childrens: 1
+            checkin: "2026-08-01"
+            checkout: "2026-08-05"
+    responses:
+      '200':
+        description: Pre-reserva creada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingResource'
+      '422':
+        description: Token inválido / expirado o datos incorrectos
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+
+  put:
+    tags: [Bookings]
+    summary: Completar pre-reserva con datos del huésped (paso 2 de 2)
+    description: |
+      Actualiza una pre-reserva existente con los datos personales del huésped.
+      El campo `id` debe ser el UUID devuelto en el paso 1.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateBookingRequest'
+          example:
+            id: "550e8400-e29b-41d4-a716-446655440001"
+            name: "Juan"
+            lastname: "Pérez"
+            email: "juan@example.com"
+            phone: "+5491112345678"
+    responses:
+      '200':
+        description: Pre-reserva actualizada con datos del huésped
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  get:
+    tags: [Bookings]
+    summary: Obtener pre-reserva por token UUID
+    description: Recupera una pre-reserva usando su UUID. Se pasa como query param `token`.
+    parameters:
+      - name: token
+        in: query
+        required: true
+        schema:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440001"
+    responses:
+      '200':
+        description: Pre-reserva encontrada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingResource'
+      '404':
+        description: Pre-reserva no encontrada
+
+bookings-list:
+  get:
+    tags: [Bookings]
+    summary: Listar todas las pre-reservas
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookingCollection'
+
+reservations:
+  get:
+    tags: [Reservations]
+    summary: Listar reservas confirmadas
+    description: |
+      Devuelve reservas confirmadas paginadas, ordenadas por id descendente.
+      A diferencia de las pre-reservas (`/booking`), las reservas son registros
+      completos con huésped, canal, estado y datos financieros.
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: accommodation_id
+        in: query
+        schema: { type: integer }
+      - name: channel_id
+        in: query
+        schema: { type: integer }
+      - name: status_id
+        in: query
+        schema: { type: integer }
+      - name: checkin_from
+        in: query
+        schema: { type: string, format: date, example: '2026-07-01' }
+      - name: checkin_to
+        in: query
+        schema: { type: string, format: date, example: '2026-07-31' }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCollection'

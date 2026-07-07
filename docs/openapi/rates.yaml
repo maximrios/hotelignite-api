@@ -1,0 +1,108 @@
+collection:
+  get:
+    tags: [Rates]
+    summary: Listar tarifas
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: rate_plan_id
+        in: query
+        schema: { type: integer }
+      - name: date_from
+        in: query
+        schema: { type: string, format: date, example: '2026-06-01' }
+      - name: date_to
+        in: query
+        schema: { type: string, format: date, example: '2026-06-30' }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateCollection'
+
+  post:
+    tags: [Rates]
+    summary: |
+      Crear/actualizar tarifas por rango de fechas (upsert bulk).
+      Genera un registro por cada día del rango `date_from`–`date_to`.
+      Si ya existe una tarifa para ese día y plan, la sobreescribe.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreRateRequest'
+          example:
+            rate_plan_id: 1
+            date_from: "2026-07-01"
+            date_to: "2026-07-31"
+            price: 15000
+            currency: ARS
+            min_stay: 2
+            max_stay: null
+    responses:
+      '201':
+        description: Tarifas creadas/actualizadas
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateCollection'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Rates]
+    summary: Eliminar tarifa individual
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rate_id]
+            properties:
+              rate_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletedRateResponse'
+
+item:
+  get:
+    tags: [Rates]
+    summary: Obtener tarifa individual
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateResource'
+
+  put:
+    tags: [Rates]
+    summary: Actualizar tarifa individual
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRateRequest'
+    responses:
+      '200':
+        description: Actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RateResource'

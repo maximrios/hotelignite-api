@@ -1,0 +1,94 @@
+collection:
+  get:
+    tags: [Rate Plans]
+    summary: Listar planes tarifarios
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: room_type_id
+        in: query
+        schema: { type: integer }
+      - name: enabled
+        in: query
+        schema: { type: boolean }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatePlanCollection'
+
+  post:
+    tags: [Rate Plans]
+    summary: Crear plan tarifario
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreRatePlanRequest'
+    responses:
+      '201':
+        description: Creado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatePlanResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Rate Plans]
+    summary: Eliminar plan tarifario
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [rate_plan_id]
+            properties:
+              rate_plan_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletedRatePlanResponse'
+
+item:
+  get:
+    tags: [Rate Plans]
+    summary: Obtener plan tarifario (incluye rates)
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatePlanResourceWithRates'
+
+  put:
+    tags: [Rate Plans]
+    summary: Actualizar plan tarifario
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRatePlanRequest'
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatePlanResource'

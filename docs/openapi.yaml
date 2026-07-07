@@ -1,0 +1,1205 @@
+openapi: 3.0.3
+info:
+  title: HotelIgnite API
+  description: |
+    API REST del PMS HotelIgnite. Todos los endpoints bajo `/api/v1/` requieren autenticación
+    Bearer (Laravel Sanctum) excepto donde se indique lo contrario.
+
+    **Convenciones:**
+    - `DELETE` recibe el ID en el body (no en la URL), salvo `Channels` que usa `DELETE /channels/{id}` (apiResource estándar de Laravel).
+    - `GET index` devuelve colección paginada con `data` + `meta`.
+    - Precios (`price`) se almacenan en **centavos** (integer). Ej: `15000` = $150.00 ARS.
+    - Disponibilidad y tarifas soportan **upsert bulk por rango de fechas** en `POST`.
+
+    **Archivos de paths por dominio** (en `docs/openapi/`):
+    - `rooms.yaml` — Habitaciones físicas
+    - `room-types.yaml` — Tipos, descripciones, servicios y camas
+    - `rate-plans.yaml` — Planes tarifarios
+    - `rates.yaml` — Tarifas diarias
+    - `room-availability.yaml` — Disponibilidad
+    - `channels.yaml` — Canales de distribución
+    - `services.yaml` — Servicios y amenities
+    - `accommodation-policies.yaml` — Políticas, traducciones y tarifas de cancelación
+    - `bookings.yaml` — Pre-reservas y reservas confirmadas
+  version: "1.0.0"
+
+servers:
+  - url: /api/v1
+    description: API v1
+
+security:
+  - sanctum: []
+
+tags:
+  - name: Accommodations
+    description: Alojamientos — ficha principal, búsqueda y disponibilidad
+  - name: Accommodation Services
+    description: Relación muchos-a-muchos entre alojamientos y servicios
+  - name: Rooms
+    description: Habitaciones físicas individuales
+  - name: Room Types
+    description: Tipos de habitación de un alojamiento
+  - name: Room Type Descriptions
+    description: Descripciones multilenguaje de tipos de habitación
+  - name: Room Type Services
+    description: Servicios asociados a tipos de habitación
+  - name: Room Type Beds
+    description: Configuración de camas por tipo de habitación
+  - name: Rate Plans
+    description: Planes tarifarios por tipo de habitación
+  - name: Rates
+    description: Tarifas diarias por plan tarifario
+  - name: Room Availability
+    description: Inventario de disponibilidad por tipo de habitación y fecha
+  - name: Channels
+    description: Canales de distribución (OTA, directo, agencia, GDS)
+  - name: Services
+    description: Servicios y amenities
+  - name: Accommodation Policies
+    description: Políticas operativas del alojamiento (horarios, huéspedes, pagos)
+  - name: Accommodation Policy Translations
+    description: Traducciones de las reglas de la casa por idioma
+  - name: Accommodation Rate Policies
+    description: Políticas de tarifas y cancelación por tipo de tarifa
+  - name: Bookings
+    description: Pre-reservas iniciadas por el huésped (flujo de dos pasos)
+  - name: Reservations
+    description: Reservas confirmadas con huésped, canal y estado
+
+# ===========================================================================
+# PATHS — cada sección es un $ref al archivo de dominio correspondiente
+# ===========================================================================
+
+paths:
+
+  # Accommodations
+  /accommodations:
+    $ref: './openapi/accommodations.yaml#/collection'
+  /accommodation/{slug}:
+    $ref: './openapi/accommodations.yaml#/item-by-slug'
+  /accommodations/{id}:
+    $ref: './openapi/accommodations.yaml#/item'
+  /accommodations/types:
+    $ref: './openapi/accommodations.yaml#/types'
+  /accommodations/{id}/services:
+    $ref: './openapi/accommodations.yaml#/item-services'
+  /accommodations/{id}/policies:
+    $ref: './openapi/accommodations.yaml#/item-policies'
+  /accommodations/{id}/availability:
+    $ref: './openapi/accommodations.yaml#/item-availability'
+
+  # Accommodation Services
+  /accommodation-services:
+    $ref: './openapi/accommodations.yaml#/accommodation-services-collection'
+  /accommodation-services/{id}:
+    $ref: './openapi/accommodations.yaml#/accommodation-services-item'
+  /accommodations/{id}/services/sync:
+    $ref: './openapi/accommodations.yaml#/accommodation-services-sync'
+
+  # Rooms
+  /rooms:
+    $ref: './openapi/rooms.yaml#/collection'
+  /rooms/{id}:
+    $ref: './openapi/rooms.yaml#/item'
+
+  # Room Types
+  /room-types:
+    $ref: './openapi/room-types.yaml#/collection'
+  /room-types/{id}:
+    $ref: './openapi/room-types.yaml#/item'
+
+  # Room Type Descriptions
+  /room-type-descriptions:
+    $ref: './openapi/room-types.yaml#/descriptions-collection'
+  /room-type-descriptions/{id}:
+    $ref: './openapi/room-types.yaml#/descriptions-item'
+  /room-types/{id}/descriptions:
+    $ref: './openapi/room-types.yaml#/item-descriptions'
+
+  # Room Type Services
+  /room-type-services:
+    $ref: './openapi/room-types.yaml#/services-collection'
+  /room-type-services/{id}:
+    $ref: './openapi/room-types.yaml#/services-item'
+  /room-types/{id}/services:
+    $ref: './openapi/room-types.yaml#/item-services'
+
+  # Room Type Beds
+  /room-type-beds:
+    $ref: './openapi/room-types.yaml#/beds-collection'
+  /room-type-beds/{id}:
+    $ref: './openapi/room-types.yaml#/beds-item'
+
+  # Rate Plans
+  /rate-plans:
+    $ref: './openapi/rate-plans.yaml#/collection'
+  /rate-plans/{id}:
+    $ref: './openapi/rate-plans.yaml#/item'
+
+  # Rates
+  /rates:
+    $ref: './openapi/rates.yaml#/collection'
+  /rates/{id}:
+    $ref: './openapi/rates.yaml#/item'
+
+  # Room Availability
+  /room-availability:
+    $ref: './openapi/room-availability.yaml#/collection'
+  /room-availability/{id}:
+    $ref: './openapi/room-availability.yaml#/item'
+
+  # Channels
+  /channels:
+    $ref: './openapi/channels.yaml#/collection'
+  /channels/{id}:
+    $ref: './openapi/channels.yaml#/item'
+
+  # Services
+  /services:
+    $ref: './openapi/services.yaml#/collection'
+  /services/{id}:
+    $ref: './openapi/services.yaml#/item'
+
+  # Accommodation Policies
+  /accommodation-policies:
+    $ref: './openapi/accommodation-policies.yaml#/collection'
+  /accommodation-policies/{id}:
+    $ref: './openapi/accommodation-policies.yaml#/item'
+
+  # Accommodation Policy Translations
+  /accommodation-policy-translations:
+    $ref: './openapi/accommodation-policies.yaml#/translations-collection'
+  /accommodation-policy-translations/{id}:
+    $ref: './openapi/accommodation-policies.yaml#/translations-item'
+
+  # Accommodation Rate Policies
+  /accommodation-rate-policies:
+    $ref: './openapi/accommodation-policies.yaml#/rate-policies-collection'
+  /accommodation-rate-policies/{id}:
+    $ref: './openapi/accommodation-policies.yaml#/rate-policies-item'
+
+  # Bookings
+  /booking:
+    $ref: './openapi/bookings.yaml#/booking'
+  /bookings:
+    $ref: './openapi/bookings.yaml#/bookings-list'
+
+  # Reservations
+  /reservations:
+    $ref: './openapi/bookings.yaml#/reservations'
+
+# ===========================================================================
+# COMPONENTS — todos los schemas centralizados aquí
+# ===========================================================================
+
+components:
+
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token obtenido en POST /api/auth/login
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Registros por página (default 10, max 100)
+      schema: { type: integer, default: 10, maximum: 100 }
+
+    OffsetParam:
+      name: offset
+      in: query
+      schema: { type: integer, default: 0 }
+
+  responses:
+    ValidationError:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string, example: "The given data was invalid." }
+              errors:
+                type: object
+                additionalProperties:
+                  type: array
+                  items: { type: string }
+
+  schemas:
+
+    # -----------------------------------------------------------------------
+    # ACCOMMODATION
+    # -----------------------------------------------------------------------
+    AccommodationResource:
+      type: object
+      properties:
+        id:               { type: integer, example: 1 }
+        slug:             { type: string, example: "hotel-ignite-bariloche" }
+        logo:             { type: string, nullable: true }
+        name:             { type: string, example: "Hotel Ignite Bariloche" }
+        address:          { type: string, nullable: true, example: "Av. San Martín 450" }
+        state:            { type: string, nullable: true, example: "Río Negro" }
+        city:             { type: string, nullable: true, example: "Bariloche" }
+        email:            { type: string, format: email, nullable: true }
+        phone:            { type: string, nullable: true }
+        type:             { type: string, nullable: true, example: "Hotel 4 estrellas" }
+        type_id:          { type: integer, nullable: true }
+        latitude:         { type: number, format: float, nullable: true }
+        longitude:        { type: number, format: float, nullable: true }
+        allow_bookings:
+          type: integer
+          enum: [0, 1]
+          description: "1 si el plan_id === 1 (reservas online habilitadas)"
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              id:    { type: integer }
+              url:   { type: string }
+              alt:   { type: string, nullable: true }
+              order: { type: integer }
+        web:         { type: string, format: uri, nullable: true }
+        enabled:     { type: boolean }
+        services:
+          type: array
+          items: { type: object }
+        description: { type: string, nullable: true }
+        rooms:
+          $ref: '#/components/schemas/RoomTypeCollection'
+
+    AccommodationCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AccommodationResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreAccommodationRequest:
+      type: object
+      required: [name]
+      properties:
+        name:               { type: string, minLength: 3, example: "Hotel Ignite" }
+        account_id:         { type: integer, nullable: true }
+        plan_id:            { type: integer, nullable: true }
+        type_id:            { type: integer, nullable: true }
+        email:              { type: string, format: email, nullable: true }
+        phone:              { type: string, nullable: true, maxLength: 50 }
+        email_reservations: { type: string, format: email, nullable: true }
+        phone_reservations: { type: string, nullable: true, maxLength: 50 }
+        web:                { type: string, format: uri, nullable: true }
+        address:            { type: string, nullable: true, maxLength: 255 }
+        postal_code:        { type: string, nullable: true, maxLength: 20 }
+        city_id:            { type: integer, nullable: true }
+        state_id:           { type: integer, nullable: true }
+        country_id:         { type: string, nullable: true, maxLength: 10 }
+        currency_id:        { type: string, nullable: true, maxLength: 4 }
+        enabled:            { type: boolean, nullable: true }
+
+    UpdateAccommodationRequest:
+      type: object
+      properties:
+        name:               { type: string, minLength: 3 }
+        account_id:         { type: integer, nullable: true }
+        plan_id:            { type: integer, nullable: true }
+        type_id:            { type: integer, nullable: true }
+        email:              { type: string, format: email, nullable: true }
+        phone:              { type: string, nullable: true, maxLength: 50 }
+        email_reservations: { type: string, format: email, nullable: true }
+        phone_reservations: { type: string, nullable: true, maxLength: 50 }
+        web:                { type: string, format: uri, nullable: true }
+        address:            { type: string, nullable: true, maxLength: 255 }
+        postal_code:        { type: string, nullable: true, maxLength: 20 }
+        city_id:            { type: integer, nullable: true }
+        state_id:           { type: integer, nullable: true }
+        country_id:         { type: string, nullable: true, maxLength: 10 }
+        currency_id:        { type: string, nullable: true, maxLength: 4 }
+        file_number:        { type: string, nullable: true, maxLength: 50 }
+        tax_identification: { type: string, nullable: true, maxLength: 50 }
+        channel_code:       { type: string, nullable: true, maxLength: 50 }
+        bank_data:          { type: string, nullable: true }
+        comment:            { type: string, nullable: true }
+        enabled:            { type: boolean, nullable: true }
+        active:             { type: boolean, nullable: true }
+        test:               { type: boolean, nullable: true }
+        expiration:         { type: string, format: date, nullable: true }
+
+    AccommodationTypeResource:
+      type: object
+      properties:
+        id:   { type: integer, example: 4 }
+        name: { type: string, example: "Hotel 4 estrellas" }
+        slug: { type: string, example: "hotel-4-estrellas" }
+
+    AccommodationTypeCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AccommodationTypeResource' } }
+
+    AccommodationServiceResource:
+      type: object
+      properties:
+        id:               { type: integer, example: 1 }
+        accommodation_id: { type: integer, example: 1 }
+        service_id:       { type: integer, example: 3 }
+        accommodation:
+          type: object
+          nullable: true
+          properties:
+            id:   { type: integer }
+            name: { type: string }
+            slug: { type: string }
+        service:
+          type: object
+          nullable: true
+          properties:
+            id:   { type: integer }
+            name: { type: string }
+
+    AccommodationServiceCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AccommodationServiceResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    AvailabilityAvailableResponse:
+      type: object
+      properties:
+        available:  { type: boolean, example: true }
+        token:      { type: string, format: uuid, description: "UUID de un solo uso para POST /booking. Expira en 15 min." }
+        nights:     { type: integer, example: 4 }
+        expires_at: { type: string, format: date-time, example: "2026-08-01T14:30:00+00:00" }
+
+    AvailabilityUnavailableResponse:
+      type: object
+      properties:
+        available: { type: boolean, example: false }
+
+    # -----------------------------------------------------------------------
+    # Shared
+    # -----------------------------------------------------------------------
+    PaginationMeta:
+      type: object
+      properties:
+        current_page: { type: integer, example: 1 }
+        per_page:     { type: integer, example: 10 }
+        total:        { type: integer, example: 100 }
+        last_page:    { type: integer, example: 10 }
+
+    ErrorResponse:
+      type: object
+      properties:
+        message: { type: string }
+
+    # -----------------------------------------------------------------------
+    # ROOM
+    # -----------------------------------------------------------------------
+    RoomResource:
+      type: object
+      properties:
+        id:               { type: integer, example: 1 }
+        number:           { type: string, example: "101" }
+        floor:            { type: integer, example: 1, nullable: true }
+        status:
+          type: string
+          enum: [available, occupied, maintenance, blocked, checkout]
+          example: available
+        notes:            { type: string, nullable: true, example: "Cama extra disponible" }
+        room_type_id:     { type: integer, example: 2 }
+        accommodation_id: { type: integer, example: 1 }
+        room_type:
+          type: object
+          nullable: true
+          properties:
+            id:            { type: integer }
+            max_occupancy: { type: integer, nullable: true }
+            category_id:   { type: integer, nullable: true }
+        accommodation:
+          type: object
+          nullable: true
+          properties:
+            id:   { type: integer }
+            name: { type: string }
+
+    RoomCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RoomResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreRoomRequest:
+      type: object
+      required: [room_type_id, accommodation_id, number]
+      properties:
+        room_type_id:     { type: integer, example: 2 }
+        accommodation_id: { type: integer, example: 1 }
+        number:           { type: string, example: "101" }
+        floor:            { type: integer, nullable: true, example: 1 }
+        status:
+          type: string
+          enum: [available, occupied, maintenance, blocked, checkout]
+          default: available
+        notes:            { type: string, nullable: true }
+
+    UpdateRoomRequest:
+      type: object
+      properties:
+        number: { type: string }
+        floor:  { type: integer, nullable: true }
+        status:
+          type: string
+          enum: [available, occupied, maintenance, blocked, checkout]
+        notes:  { type: string, nullable: true }
+
+    DeletedRoomResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Room deleted successfully" }
+        data:    { $ref: '#/components/schemas/RoomResource' }
+
+    # -----------------------------------------------------------------------
+    # ROOM TYPE
+    # -----------------------------------------------------------------------
+    RoomTypeResource:
+      type: object
+      properties:
+        id:                 { type: integer, example: 1 }
+        name:               { type: string, example: "Suite Junior", nullable: true }
+        description:        { type: string, nullable: true }
+        size:               { type: number, format: float, nullable: true, example: 28.5 }
+        max_occupancy:      { type: integer, nullable: true, example: 3 }
+        standard_occupancy: { type: integer, nullable: true, example: 2 }
+        quantity:           { type: integer, nullable: true, example: 6 }
+        status:
+          type: string
+          enum: [active, inactive, maintenance]
+          nullable: true
+        slug:               { type: string, nullable: true, example: "suite-junior" }
+        accommodation_id:   { type: integer, example: 1 }
+        category_id:        { type: integer, nullable: true }
+        category:           { type: string, nullable: true, example: "Suite" }
+        accommodation:
+          type: object
+          nullable: true
+          properties:
+            id:   { type: integer }
+            name: { type: string }
+        images:
+          type: array
+          items:
+            type: object
+            properties:
+              id:    { type: integer }
+              url:   { type: string }
+              alt:   { type: string, nullable: true }
+              order: { type: integer }
+        services:
+          type: array
+          items: { type: object }
+
+    RoomTypeCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RoomTypeResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreRoomTypeRequest:
+      type: object
+      required: [accommodation_id]
+      properties:
+        accommodation_id:   { type: integer, example: 1 }
+        category_id:        { type: integer, nullable: true }
+        slug:               { type: string, nullable: true, example: "suite-junior" }
+        size:               { type: number, nullable: true, example: 28.5 }
+        max_occupancy:      { type: integer, nullable: true, example: 3 }
+        standard_occupancy: { type: integer, nullable: true, example: 2 }
+        quantity:           { type: integer, nullable: true, example: 6 }
+        status:
+          type: string
+          enum: [active, inactive, maintenance]
+          nullable: true
+
+    UpdateRoomTypeRequest:
+      type: object
+      properties:
+        accommodation_id:   { type: integer }
+        category_id:        { type: integer, nullable: true }
+        slug:               { type: string, nullable: true }
+        size:               { type: number, nullable: true }
+        max_occupancy:      { type: integer, nullable: true }
+        standard_occupancy: { type: integer, nullable: true }
+        quantity:           { type: integer, nullable: true }
+        status:
+          type: string
+          enum: [active, inactive, maintenance]
+          nullable: true
+
+    # -----------------------------------------------------------------------
+    # ROOM TYPE DESCRIPTION
+    # -----------------------------------------------------------------------
+    RoomTypeDescriptionResource:
+      type: object
+      properties:
+        id:           { type: integer }
+        room_type_id: { type: integer }
+        language_id:  { type: string, example: es }
+        name:         { type: string }
+        description:  { type: string, nullable: true }
+
+    RoomTypeDescriptionCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RoomTypeDescriptionResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    # -----------------------------------------------------------------------
+    # ROOM TYPE BED
+    # -----------------------------------------------------------------------
+    RoomTypeBedResource:
+      type: object
+      properties:
+        id:           { type: integer, example: 1 }
+        room_type_id: { type: integer, example: 2 }
+        type:
+          type: string
+          enum: [single, double, twin, queen, king, sofa_bed, bunk]
+          example: queen
+        quantity:     { type: integer, example: 1 }
+        room_type:
+          type: object
+          nullable: true
+          properties:
+            id:            { type: integer }
+            max_occupancy: { type: integer, nullable: true }
+
+    RoomTypeBedCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RoomTypeBedResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreRoomTypeBedRequest:
+      type: object
+      required: [room_type_id, type]
+      properties:
+        room_type_id: { type: integer, example: 2 }
+        type:
+          type: string
+          enum: [single, double, twin, queen, king, sofa_bed, bunk]
+          example: queen
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 1
+
+    UpdateRoomTypeBedRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [single, double, twin, queen, king, sofa_bed, bunk]
+        quantity:
+          type: integer
+          minimum: 1
+          maximum: 10
+
+    DeletedRoomTypeBedResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Room type bed deleted successfully" }
+        data:    { $ref: '#/components/schemas/RoomTypeBedResource' }
+
+    # -----------------------------------------------------------------------
+    # RATE PLAN
+    # -----------------------------------------------------------------------
+    RatePlanResource:
+      type: object
+      properties:
+        id:                 { type: integer, example: 1 }
+        room_type_id:       { type: integer, example: 2 }
+        name:               { type: string, example: "Tarifa Flexible" }
+        code:               { type: string, nullable: true, example: "BAR" }
+        cancellation:
+          type: string
+          enum: [flexible, moderate, strict, non_refundable]
+          example: flexible
+        includes_breakfast: { type: boolean, example: false }
+        enabled:            { type: boolean, example: true }
+        room_type:
+          type: object
+          nullable: true
+          properties:
+            id:            { type: integer }
+            max_occupancy: { type: integer, nullable: true }
+
+    RatePlanResourceWithRates:
+      allOf:
+        - $ref: '#/components/schemas/RatePlanResource'
+        - type: object
+          properties:
+            rates:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:       { type: integer }
+                  date:     { type: string, format: date }
+                  price:    { type: integer, description: "En centavos" }
+                  currency: { type: string, example: ARS }
+                  min_stay: { type: integer }
+                  max_stay: { type: integer, nullable: true }
+
+    RatePlanCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RatePlanResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreRatePlanRequest:
+      type: object
+      required: [room_type_id, name]
+      properties:
+        room_type_id:       { type: integer, example: 2 }
+        name:               { type: string, minLength: 3, example: "Tarifa Flexible" }
+        code:               { type: string, nullable: true, example: "BAR" }
+        cancellation:
+          type: string
+          enum: [flexible, moderate, strict, non_refundable]
+          default: flexible
+        includes_breakfast: { type: boolean, default: false }
+        enabled:            { type: boolean, default: true }
+
+    UpdateRatePlanRequest:
+      type: object
+      properties:
+        name:               { type: string, minLength: 3 }
+        code:               { type: string, nullable: true }
+        cancellation:
+          type: string
+          enum: [flexible, moderate, strict, non_refundable]
+        includes_breakfast: { type: boolean }
+        enabled:            { type: boolean }
+
+    DeletedRatePlanResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Rate plan deleted successfully" }
+        data:    { $ref: '#/components/schemas/RatePlanResource' }
+
+    # -----------------------------------------------------------------------
+    # RATE
+    # -----------------------------------------------------------------------
+    RateResource:
+      type: object
+      properties:
+        id:            { type: integer, example: 1 }
+        rate_plan_id:  { type: integer, example: 1 }
+        date:          { type: string, format: date, example: "2026-07-01" }
+        price:         { type: integer, example: 15000, description: "En centavos. 15000 = $150.00" }
+        price_decimal: { type: number, format: float, example: 150.00 }
+        currency:      { type: string, example: "ARS" }
+        min_stay:      { type: integer, example: 1 }
+        max_stay:      { type: integer, nullable: true, example: null }
+        rate_plan:
+          type: object
+          nullable: true
+          properties:
+            id:           { type: integer }
+            name:         { type: string }
+            cancellation: { type: string }
+
+    RateCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RateResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreRateRequest:
+      type: object
+      required: [rate_plan_id, date_from, date_to, price]
+      properties:
+        rate_plan_id: { type: integer, example: 1 }
+        date_from:    { type: string, format: date, example: "2026-07-01" }
+        date_to:      { type: string, format: date, example: "2026-07-31" }
+        price:        { type: integer, minimum: 0, example: 15000, description: "En centavos" }
+        currency:     { type: string, minLength: 3, maxLength: 3, default: "ARS" }
+        min_stay:     { type: integer, minimum: 1, default: 1 }
+        max_stay:     { type: integer, minimum: 1, nullable: true }
+
+    UpdateRateRequest:
+      type: object
+      properties:
+        price:    { type: integer, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        min_stay: { type: integer, minimum: 1, nullable: true }
+        max_stay: { type: integer, minimum: 1, nullable: true }
+
+    DeletedRateResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Rate deleted successfully" }
+        data:    { $ref: '#/components/schemas/RateResource' }
+
+    # -----------------------------------------------------------------------
+    # ROOM AVAILABILITY
+    # -----------------------------------------------------------------------
+    RoomAvailabilityResource:
+      type: object
+      properties:
+        id:                   { type: integer, example: 1 }
+        room_type_id:         { type: integer, example: 2 }
+        date:                 { type: string, format: date, example: "2026-07-01" }
+        available:            { type: integer, example: 5, description: "Habitaciones disponibles ese día" }
+        total:                { type: integer, example: 6, description: "Total de habitaciones del tipo" }
+        closed:               { type: boolean, example: false, description: "Bloqueo total — no se pueden hacer reservas" }
+        closed_to_arrival:    { type: boolean, example: false, description: "CTA — no se puede hacer check-in ese día" }
+        closed_to_departure:  { type: boolean, example: false, description: "CTD — no se puede hacer check-out ese día" }
+        room_type:
+          type: object
+          nullable: true
+          properties:
+            id:            { type: integer }
+            max_occupancy: { type: integer, nullable: true }
+
+    RoomAvailabilityCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/RoomAvailabilityResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreRoomAvailabilityRequest:
+      type: object
+      required: [room_type_id, date_from, date_to, available, total]
+      properties:
+        room_type_id:        { type: integer, example: 2 }
+        date_from:           { type: string, format: date, example: "2026-07-01" }
+        date_to:             { type: string, format: date, example: "2026-07-31" }
+        available:           { type: integer, minimum: 0, example: 5 }
+        total:               { type: integer, minimum: 0, example: 6 }
+        closed:              { type: boolean, default: false }
+        closed_to_arrival:   { type: boolean, default: false }
+        closed_to_departure: { type: boolean, default: false }
+
+    UpdateRoomAvailabilityRequest:
+      type: object
+      properties:
+        available:           { type: integer, minimum: 0 }
+        total:               { type: integer, minimum: 0 }
+        closed:              { type: boolean, nullable: true }
+        closed_to_arrival:   { type: boolean, nullable: true }
+        closed_to_departure: { type: boolean, nullable: true }
+
+    DeletedRoomAvailabilityResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Room availability deleted successfully" }
+        data:    { $ref: '#/components/schemas/RoomAvailabilityResource' }
+
+    # -----------------------------------------------------------------------
+    # CHANNEL
+    # -----------------------------------------------------------------------
+    ChannelResource:
+      type: object
+      properties:
+        id:   { type: integer, example: 1 }
+        name: { type: string, example: "Despegar.com" }
+        business_type:
+          type: string
+          enum: [direct, ota, agency, gds, corporate, tour_operator, metasearch]
+          example: agency
+        connection_type:
+          type: string
+          enum: [manual, api, ical, gds, email]
+          example: api
+        code:            { type: string, nullable: true, example: "DSP" }
+        email:           { type: string, format: email, nullable: true }
+        phone:           { type: string, nullable: true }
+        web:             { type: string, format: uri, nullable: true }
+        ota:             { type: boolean, nullable: true, description: "Campo legacy" }
+        commission_rate: { type: number, format: float, nullable: true, example: 18.00 }
+        enabled:         { type: boolean, example: true }
+
+    ChannelCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ChannelResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreChannelRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 2
+          example: "Despegar.com"
+        business_type:
+          type: string
+          enum: [direct, ota, agency, gds, corporate, tour_operator, metasearch]
+          default: direct
+        connection_type:
+          type: string
+          enum: [manual, api, ical, gds, email]
+          default: manual
+        code:            { type: string, nullable: true, maxLength: 20, example: "DSP" }
+        email:           { type: string, format: email, nullable: true }
+        phone:           { type: string, nullable: true }
+        web:             { type: string, format: uri, nullable: true }
+        ota:             { type: boolean, nullable: true }
+        commission_rate: { type: number, minimum: 0, maximum: 100, nullable: true }
+        enabled:         { type: boolean, default: true }
+
+    UpdateChannelRequest:
+      type: object
+      properties:
+        name:            { type: string, minLength: 2 }
+        business_type:
+          type: string
+          enum: [direct, ota, agency, gds, corporate, tour_operator, metasearch]
+        connection_type:
+          type: string
+          enum: [manual, api, ical, gds, email]
+        code:            { type: string, nullable: true, maxLength: 20 }
+        email:           { type: string, format: email, nullable: true }
+        phone:           { type: string, nullable: true }
+        web:             { type: string, format: uri, nullable: true }
+        ota:             { type: boolean, nullable: true }
+        commission_rate: { type: number, minimum: 0, maximum: 100, nullable: true }
+        enabled:         { type: boolean }
+
+    # -----------------------------------------------------------------------
+    # SERVICE
+    # -----------------------------------------------------------------------
+    ServiceResource:
+      type: object
+      properties:
+        id:   { type: integer, example: 1 }
+        name: { type: string, example: "WiFi" }
+        slug: { type: string, example: "wifi" }
+        icon: { type: string, nullable: true, example: "wifi-icon" }
+        type:
+          type: string
+          enum: [general, room, bathroom, accessibility, kitchen]
+          example: room
+        is_highlighted: { type: boolean, example: false }
+        enabled:        { type: boolean, example: true }
+        qty:            { type: integer, example: 12, description: "Alojamientos que usan este servicio" }
+
+    ServiceCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ServiceResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreServiceRequest:
+      type: object
+      required: [name]
+      properties:
+        name:           { type: string, minLength: 3, example: "WiFi" }
+        slug:           { type: string, example: "wifi" }
+        icon:           { type: string, nullable: true }
+        type:
+          type: string
+          enum: [general, room, bathroom, accessibility, kitchen]
+          default: general
+        is_highlighted: { type: boolean, default: false }
+        enabled:        { type: boolean, default: true }
+
+    UpdateServiceRequest:
+      type: object
+      properties:
+        name:           { type: string, minLength: 3 }
+        slug:           { type: string }
+        icon:           { type: string, nullable: true }
+        type:
+          type: string
+          enum: [general, room, bathroom, accessibility, kitchen]
+        is_highlighted: { type: boolean, nullable: true }
+        enabled:        { type: boolean }
+
+    # -----------------------------------------------------------------------
+    # ACCOMMODATION POLICY
+    # -----------------------------------------------------------------------
+    AccommodationPolicyResource:
+      type: object
+      properties:
+        id:               { type: integer, example: 1 }
+        accommodation_id: { type: integer, example: 1 }
+        checkin_from:     { type: string, format: time, nullable: true, example: "14:00" }
+        checkin_to:       { type: string, format: time, nullable: true, example: "22:00" }
+        checkout_from:    { type: string, format: time, nullable: true, example: "08:00" }
+        checkout_to:      { type: string, format: time, nullable: true, example: "11:00" }
+        min_age:          { type: integer, nullable: true, example: 18 }
+        allow_children:   { type: boolean, example: true }
+        children_max_age: { type: integer, nullable: true, example: 12 }
+        allow_pets:       { type: boolean, example: false }
+        allow_smoking:    { type: boolean, example: false }
+        allow_parties:    { type: boolean, example: false }
+        payment_card:     { type: boolean, example: true }
+        payment_cash:     { type: boolean, example: true }
+        payment_transfer: { type: boolean, example: false }
+        payment_crypto:   { type: boolean, example: false }
+        accommodation:
+          type: object
+          nullable: true
+          properties:
+            id:   { type: integer }
+            name: { type: string }
+            slug: { type: string }
+        translations:
+          type: array
+          items: { $ref: '#/components/schemas/AccommodationPolicyTranslationResource' }
+
+    AccommodationPolicyCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AccommodationPolicyResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    AccommodationPolicyResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Accommodation policy created successfully" }
+        data:    { $ref: '#/components/schemas/AccommodationPolicyResource' }
+
+    StoreAccommodationPolicyRequest:
+      type: object
+      required: [accommodation_id]
+      properties:
+        accommodation_id: { type: integer, example: 1 }
+        checkin_from:     { type: string, format: time, nullable: true, example: "14:00" }
+        checkin_to:       { type: string, format: time, nullable: true, example: "22:00" }
+        checkout_from:    { type: string, format: time, nullable: true, example: "08:00" }
+        checkout_to:      { type: string, format: time, nullable: true, example: "11:00" }
+        min_age:          { type: integer, nullable: true, minimum: 0, maximum: 100 }
+        allow_children:   { type: boolean, default: false }
+        children_max_age: { type: integer, nullable: true, minimum: 0, maximum: 17 }
+        allow_pets:       { type: boolean, default: false }
+        allow_smoking:    { type: boolean, default: false }
+        allow_parties:    { type: boolean, default: false }
+        payment_card:     { type: boolean, default: false }
+        payment_cash:     { type: boolean, default: false }
+        payment_transfer: { type: boolean, default: false }
+        payment_crypto:   { type: boolean, default: false }
+
+    UpdateAccommodationPolicyRequest:
+      type: object
+      properties:
+        checkin_from:     { type: string, format: time, nullable: true }
+        checkin_to:       { type: string, format: time, nullable: true }
+        checkout_from:    { type: string, format: time, nullable: true }
+        checkout_to:      { type: string, format: time, nullable: true }
+        min_age:          { type: integer, nullable: true, minimum: 0, maximum: 100 }
+        allow_children:   { type: boolean }
+        children_max_age: { type: integer, nullable: true, minimum: 0, maximum: 17 }
+        allow_pets:       { type: boolean }
+        allow_smoking:    { type: boolean }
+        allow_parties:    { type: boolean }
+        payment_card:     { type: boolean }
+        payment_cash:     { type: boolean }
+        payment_transfer: { type: boolean }
+        payment_crypto:   { type: boolean }
+
+    # -----------------------------------------------------------------------
+    # ACCOMMODATION POLICY TRANSLATION
+    # -----------------------------------------------------------------------
+    AccommodationPolicyTranslationResource:
+      type: object
+      properties:
+        id:          { type: integer, example: 1 }
+        policy_id:   { type: integer, example: 1 }
+        language_id: { type: integer, example: 1 }
+        house_rules: { type: string, nullable: true, example: "No se permite fumar dentro de las instalaciones." }
+
+    AccommodationPolicyTranslationCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AccommodationPolicyTranslationResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    AccommodationPolicyTranslationResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Policy translation created successfully" }
+        data:    { $ref: '#/components/schemas/AccommodationPolicyTranslationResource' }
+
+    StoreAccommodationPolicyTranslationRequest:
+      type: object
+      required: [policy_id, language_id]
+      properties:
+        policy_id:   { type: integer, example: 1 }
+        language_id: { type: integer, example: 1 }
+        house_rules: { type: string, nullable: true, example: "No se permite fumar." }
+
+    UpdateAccommodationPolicyTranslationRequest:
+      type: object
+      properties:
+        house_rules: { type: string, nullable: true }
+
+    # -----------------------------------------------------------------------
+    # ACCOMMODATION RATE POLICY
+    # -----------------------------------------------------------------------
+    AccommodationRatePolicyResource:
+      type: object
+      properties:
+        id:               { type: integer, example: 1 }
+        accommodation_id: { type: integer, example: 1 }
+        rate_type:
+          type: string
+          enum: [flexible, semi_flexible, non_refundable]
+          example: flexible
+          description: |
+            - `flexible`: cancelación gratuita hasta N días antes
+            - `semi_flexible`: penalización parcial por cancelación
+            - `non_refundable`: sin reembolso
+        cancel_days:     { type: integer, nullable: true, example: 3, description: "Días antes del checkin para cancelar sin cargo" }
+        cancel_penalty:  { type: number, format: float, nullable: true, example: 50.00, description: "Penalización por cancelación (%)" }
+        no_show_penalty: { type: number, format: float, nullable: true, example: 100.00, description: "Penalización por no-show (%)" }
+        accommodation:
+          type: object
+          nullable: true
+          properties:
+            id:   { type: integer }
+            name: { type: string }
+
+    AccommodationRatePolicyCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/AccommodationRatePolicyResource' } }
+        meta: { $ref: '#/components/schemas/PaginationMeta' }
+
+    AccommodationRatePolicyResponse:
+      type: object
+      properties:
+        message: { type: string, example: "Accommodation rate policy created successfully" }
+        data:    { $ref: '#/components/schemas/AccommodationRatePolicyResource' }
+
+    StoreAccommodationRatePolicyRequest:
+      type: object
+      required: [accommodation_id, rate_type]
+      properties:
+        accommodation_id: { type: integer, example: 1 }
+        rate_type:
+          type: string
+          enum: [flexible, semi_flexible, non_refundable]
+          example: flexible
+        cancel_days:     { type: integer, nullable: true, minimum: 0, maximum: 365, example: 3 }
+        cancel_penalty:  { type: number, nullable: true, minimum: 0, maximum: 100, example: 50.00 }
+        no_show_penalty: { type: number, nullable: true, minimum: 0, maximum: 100, example: 100.00 }
+
+    UpdateAccommodationRatePolicyRequest:
+      type: object
+      properties:
+        cancel_days:     { type: integer, nullable: true, minimum: 0, maximum: 365 }
+        cancel_penalty:  { type: number, nullable: true, minimum: 0, maximum: 100 }
+        no_show_penalty: { type: number, nullable: true, minimum: 0, maximum: 100 }
+
+    # -----------------------------------------------------------------------
+    # BOOKING (pre-reserva, paso 1 y 2)
+    # -----------------------------------------------------------------------
+    BookingResource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440001"
+          description: UUID generado automáticamente
+        accommodation_id: { type: integer, example: 1 }
+        accommodation:    { type: string, example: "Hotel Ignite", description: "Nombre del alojamiento" }
+        room_id:          { type: integer, nullable: true, example: 3 }
+        tour_id:          { type: integer, nullable: true, example: null }
+        checkin:          { type: string, format: date, example: "2026-08-01" }
+        checkout:         { type: string, format: date, nullable: true, example: "2026-08-05" }
+        adults:           { type: integer, example: 2 }
+        childrens:        { type: integer, example: 1 }
+        name:             { type: string, nullable: true, example: "Juan" }
+        lastname:         { type: string, nullable: true, example: "Pérez" }
+        email:            { type: string, format: email, nullable: true }
+        phone:            { type: string, nullable: true }
+
+    BookingCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/BookingResource' } }
+
+    StoreBookingRequest:
+      type: object
+      required: [adults, childrens, checkin, availability_token]
+      properties:
+        availability_token: { type: string, format: uuid, description: "Token obtenido de GET /accommodations/{id}/availability. De un solo uso." }
+        accommodation_id:   { type: integer, example: 1 }
+        room_id:            { type: integer, nullable: true, example: 3 }
+        tour_id:            { type: integer, nullable: true }
+        adults:             { type: integer, minimum: 1, example: 2 }
+        childrens:          { type: integer, minimum: 0, example: 1 }
+        checkin:            { type: string, format: date, example: "2026-08-01" }
+        checkout:           { type: string, format: date, example: "2026-08-05" }
+
+    UpdateBookingRequest:
+      type: object
+      required: [id, name, lastname, email]
+      properties:
+        id:       { type: string, format: uuid, description: "UUID de la pre-reserva (paso 1)" }
+        name:     { type: string, example: "Juan" }
+        lastname: { type: string, example: "Pérez" }
+        email:    { type: string, format: email, example: "juan@example.com" }
+        phone:    { type: string, nullable: true, example: "+5491112345678" }
+
+    # -----------------------------------------------------------------------
+    # RESERVATION (reserva confirmada)
+    # -----------------------------------------------------------------------
+    ReservationResource:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        accommodation:
+          $ref: '#/components/schemas/AccommodationEmbedded'
+        guest:
+          type: object
+          nullable: true
+          properties:
+            id:        { type: integer }
+            identity:  { type: string, nullable: true, example: "DNI 12345678" }
+            full_name: { type: string, example: "Juan Pérez" }
+            email:     { type: string, format: email, nullable: true }
+            phone:     { type: string, nullable: true }
+        channel:  { type: string, nullable: true, example: "Booking.com" }
+        status:   { type: string, nullable: true, example: "confirmed" }
+        arrival:  { type: string, format: date, example: "2026-08-01" }
+        departure: { type: string, format: date, example: "2026-08-05" }
+        pax:      { type: integer, example: 3, description: "adults + children" }
+        adults:   { type: integer, example: 2 }
+        childrens: { type: integer, example: 1 }
+
+    ReservationCollection:
+      type: object
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ReservationResource' } }
+
+    # -----------------------------------------------------------------------
+    # Shared embedded
+    # -----------------------------------------------------------------------
+    AccommodationEmbedded:
+      type: object
+      nullable: true
+      properties:
+        id:        { type: integer, example: 1 }
+        slug:      { type: string, example: "hotel-ignite" }
+        name:      { type: string, example: "Hotel Ignite" }
+        address:   { type: string, nullable: true }
+        city:      { type: string, nullable: true }
+        state:     { type: string, nullable: true }
+        enabled:   { type: boolean }

@@ -1,0 +1,99 @@
+collection:
+  get:
+    tags: [Rooms]
+    summary: Listar habitaciones
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: accommodation_id
+        in: query
+        schema: { type: integer }
+      - name: room_type_id
+        in: query
+        schema: { type: integer }
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [available, occupied, maintenance, blocked, checkout]
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomCollection'
+
+  post:
+    tags: [Rooms]
+    summary: Crear habitación
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreRoomRequest'
+    responses:
+      '201':
+        description: Creada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Rooms]
+    summary: Eliminar habitación
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_id]
+            properties:
+              room_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletedRoomResponse'
+
+item:
+  get:
+    tags: [Rooms]
+    summary: Obtener habitación
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomResource'
+
+  put:
+    tags: [Rooms]
+    summary: Actualizar habitación
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRoomRequest'
+    responses:
+      '200':
+        description: Actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomResource'

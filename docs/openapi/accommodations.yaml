@@ -1,0 +1,338 @@
+collection:
+  get:
+    tags: [Accommodations]
+    summary: Listar alojamientos
+    description: |
+      Devuelve alojamientos habilitados (`enabled = 1`) por defecto.
+      Pasar `show_all` (cualquier valor) para incluir los deshabilitados.
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: city
+        in: query
+        description: ID de la ciudad
+        schema: { type: integer, example: 5 }
+      - name: type
+        in: query
+        description: Slug(s) de tipo separados por coma. Ej. `hotel,hostel`
+        schema: { type: string, example: "hotel" }
+      - name: search
+        in: query
+        description: Búsqueda por nombre (LIKE)
+        schema: { type: string, example: "Ignite" }
+      - name: show_all
+        in: query
+        description: Si está presente, incluye alojamientos deshabilitados
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationCollection'
+
+  post:
+    tags: [Accommodations]
+    summary: Crear alojamiento
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreAccommodationRequest'
+    responses:
+      '200':
+        description: Creado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Accommodations]
+    summary: Eliminar alojamiento
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accommodation_id]
+            properties:
+              accommodation_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminado
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, example: "Accommodation deleted successfully" }
+                data:    { $ref: '#/components/schemas/AccommodationResource' }
+
+item-by-slug:
+  get:
+    tags: [Accommodations]
+    summary: Obtener alojamiento por slug
+    description: Usado principalmente por el motor de reservas para cargar la ficha pública del alojamiento.
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema: { type: string, example: "hotel-ignite-bariloche" }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationResource'
+      '404':
+        description: Alojamiento no encontrado
+
+item:
+  put:
+    tags: [Accommodations]
+    summary: Actualizar alojamiento
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateAccommodationRequest'
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+types:
+  get:
+    tags: [Accommodations]
+    summary: Listar tipos de alojamiento
+    description: |
+      Devuelve todos los tipos disponibles (hotel 1★–5★, hostel, apart-hotel, etc.).
+      Los tipos con id 1–5 representan hoteles por estrellas y se agrupan en filtros.
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationTypeCollection'
+
+item-services:
+  get:
+    tags: [Accommodations]
+    summary: Obtener servicios de un alojamiento
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCollection'
+      '404':
+        description: Alojamiento no encontrado
+
+item-policies:
+  get:
+    tags: [Accommodations]
+    summary: Obtener políticas (legacy) de un alojamiento
+    description: Devuelve las políticas genéricas en español asociadas al alojamiento (modelo legacy).
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+      '404':
+        description: Alojamiento no encontrado
+
+item-availability:
+  get:
+    tags: [Accommodations]
+    summary: Verificar disponibilidad del alojamiento
+    description: |
+      Comprueba si hay habitaciones disponibles para el rango de fechas solicitado.
+
+      Si hay disponibilidad, devuelve un `token` UUID de un solo uso (válido 15 minutos)
+      que debe enviarse en el cuerpo de `POST /booking` para confirmar la pre-reserva.
+      Si el token expira o ya fue usado, el cliente debe llamar de nuevo a este endpoint.
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+      - name: checkin
+        in: query
+        required: true
+        schema: { type: string, format: date, example: "2026-08-01" }
+      - name: checkout
+        in: query
+        required: true
+        schema: { type: string, format: date, example: "2026-08-05" }
+      - name: adults
+        in: query
+        required: true
+        schema: { type: integer, minimum: 1, maximum: 10, example: 2 }
+      - name: children
+        in: query
+        schema: { type: integer, minimum: 0, maximum: 6, example: 1 }
+    responses:
+      '200':
+        description: Resultado de disponibilidad
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/AvailabilityAvailableResponse'
+                - $ref: '#/components/schemas/AvailabilityUnavailableResponse'
+            examples:
+              available:
+                summary: Hay disponibilidad
+                value:
+                  available: true
+                  token: "550e8400-e29b-41d4-a716-446655440000"
+                  nights: 4
+                  expires_at: "2026-08-01T14:30:00+00:00"
+              unavailable:
+                summary: Sin disponibilidad
+                value:
+                  available: false
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+accommodation-services-collection:
+  get:
+    tags: [Accommodation Services]
+    summary: Listar relaciones alojamiento-servicio
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: accommodation_id
+        in: query
+        schema: { type: integer }
+      - name: service_id
+        in: query
+        schema: { type: integer }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationServiceCollection'
+
+  post:
+    tags: [Accommodation Services]
+    summary: Asociar servicios a un alojamiento (syncWithoutDetaching)
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accommodation_id, service_ids]
+            properties:
+              accommodation_id:
+                type: integer
+                example: 1
+              service_ids:
+                type: array
+                items: { type: integer }
+                example: [1, 2, 3]
+    responses:
+      '201':
+        description: Servicios asociados
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, example: "Services attached successfully" }
+                data:
+                  type: array
+                  items: { $ref: '#/components/schemas/AccommodationServiceResource' }
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Accommodation Services]
+    summary: Eliminar una relación alojamiento-servicio
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [accommodation_service_id]
+            properties:
+              accommodation_service_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, example: "AccommodationService deleted successfully" }
+                data:    { $ref: '#/components/schemas/AccommodationServiceResource' }
+
+accommodation-services-item:
+  get:
+    tags: [Accommodation Services]
+    summary: Obtener relación alojamiento-servicio
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccommodationServiceResource'
+
+accommodation-services-sync:
+  put:
+    tags: [Accommodation Services]
+    summary: Sincronizar servicios de un alojamiento (sync — reemplaza todos)
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [service_ids]
+            properties:
+              service_ids:
+                type: array
+                items: { type: integer }
+                example: [1, 4, 7]
+    responses:
+      '200':
+        description: Servicios sincronizados
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, example: "Services synchronized successfully" }
+                data:
+                  type: array
+                  items: { $ref: '#/components/schemas/AccommodationServiceResource' }

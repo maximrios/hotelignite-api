@@ -1,0 +1,112 @@
+collection:
+  get:
+    tags: [Channels]
+    summary: Listar canales de distribución
+    description: |
+      Endpoint público — no requiere autenticación.
+      Usado por el motor de reservas para identificar el canal de origen.
+    security: []
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - name: business_type
+        in: query
+        schema:
+          type: string
+          enum: [direct, ota, agency, gds, corporate, tour_operator, metasearch]
+      - name: connection_type
+        in: query
+        schema:
+          type: string
+          enum: [manual, api, ical, gds, email]
+      - name: enabled
+        in: query
+        schema: { type: boolean }
+      - name: ota
+        in: query
+        description: Filtrar por campo legacy `ota` (boolean)
+        schema: { type: boolean }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelCollection'
+
+  post:
+    tags: [Channels]
+    summary: Crear canal
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreChannelRequest'
+    responses:
+      '201':
+        description: Creado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+item:
+  get:
+    tags: [Channels]
+    summary: Obtener canal
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelResource'
+      '404':
+        description: Canal no encontrado
+
+  put:
+    tags: [Channels]
+    summary: Actualizar canal
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateChannelRequest'
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChannelResource'
+
+  delete:
+    tags: [Channels]
+    summary: Eliminar canal
+    description: |
+      **Nota:** A diferencia del resto de endpoints, este DELETE usa el ID en la URL
+      (convención apiResource de Laravel).
+
+      ⚠️ Precaución: eliminar un canal con reservas asociadas puede romper reportes históricos.
+      Considerar usar `enabled: false` en su lugar.
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: Eliminado
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, example: "Channel deleted successfully" }
+                data:    { $ref: '#/components/schemas/ChannelResource' }
+      '404':
+        description: Canal no encontrado

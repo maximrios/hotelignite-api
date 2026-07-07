@@ -18,7 +18,11 @@ class CityController extends BaseController
 
     public function index(Request $request)
     {
-        $channels = $this->cityInterface->all($request);
-        return response()->json($channels, 200);
+        return $this->cityInterface->all($request);
+    }
+
+    public function show(string $slug)
+    {
+        return $this->cityInterface->show($slug);
     }
 }

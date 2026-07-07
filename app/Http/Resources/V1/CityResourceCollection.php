@@ -11,15 +11,6 @@ class CityResourceCollection extends ResourceCollection
 
     public function toArray($request)
     {
-        return parent::toArray($request);
-        // return [
-        //     'data' => $this->collection,
-        //     'meta' => [
-        //         'current_page' => $this->currentPage(),
-        //         'per_page' => $this->perPage(),
-        //         'total' => $this->total(),
-        //         'last_page' => $this->lastPage(),
-        //     ],
-        // ];
+        return $this->collection;
     }
 }

@@ -7,13 +7,26 @@ namespace App\Repositories;
 use Illuminate\Http\Request;
 use App\Models\City;
 use App\Repositories\Contracts\CityInterface;
+use App\Http\Resources\V1\CityResource;
 use App\Http\Resources\V1\CityResourceCollection;
 
 class CityRepository implements CityInterface
 {
     public function all(Request $request)
     {
-        $cities = City::orderBy('name')->paginate();
+        $limit = $request->limit ?? 20;
+
+        $cities = City::when($request->search, fn($q, $search) => $q->where('name', 'like', "%{$search}%"))
+            ->orderBy('name')
+            ->limit($limit)
+            ->get();
+
         return new CityResourceCollection($cities);
+    }
+
+    public function show(string $slug): mixed
+    {
+        $city = City::where('slug', $slug)->with('images')->firstOrFail();
+        return new CityResource($city);
     }
 }

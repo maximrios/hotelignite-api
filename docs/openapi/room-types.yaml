@@ -1,0 +1,367 @@
+collection:
+  get:
+    tags: [Room Types]
+    summary: Listar tipos de habitación
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: accommodation_id
+        in: query
+        schema: { type: integer }
+      - name: category_id
+        in: query
+        schema: { type: integer }
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum: [active, inactive, maintenance]
+      - name: language_id
+        in: query
+        description: Código de idioma para nombre/descripción. Default "es".
+        schema: { type: string, example: es }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeCollection'
+
+  post:
+    tags: [Room Types]
+    summary: Crear tipo de habitación
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreRoomTypeRequest'
+    responses:
+      '200':
+        description: Creado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeResource'
+
+  delete:
+    tags: [Room Types]
+    summary: Eliminar tipo de habitación
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_type_id]
+            properties:
+              room_type_id:
+                type: integer
+    responses:
+      '200':
+        description: Eliminado
+
+item:
+  get:
+    tags: [Room Types]
+    summary: Obtener tipo de habitación
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+      - name: language_id
+        in: query
+        schema: { type: string, example: es }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeResource'
+
+  put:
+    tags: [Room Types]
+    summary: Actualizar tipo de habitación
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRoomTypeRequest'
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeResource'
+
+descriptions-collection:
+  get:
+    tags: [Room Type Descriptions]
+    summary: Listar descripciones
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: room_type_id
+        in: query
+        schema: { type: integer }
+      - name: language_id
+        in: query
+        schema: { type: string }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeDescriptionCollection'
+
+  post:
+    tags: [Room Type Descriptions]
+    summary: Crear descripción
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_type_id, language_id, name]
+            properties:
+              room_type_id:  { type: integer }
+              language_id:   { type: string, example: es }
+              name:          { type: string, example: "Suite Junior" }
+              description:   { type: string, example: "Habitación amplia con vista al mar." }
+    responses:
+      '201':
+        description: Creada
+
+  delete:
+    tags: [Room Type Descriptions]
+    summary: Eliminar descripción
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_type_description_id]
+            properties:
+              room_type_description_id: { type: integer }
+    responses:
+      '200':
+        description: Eliminada
+
+descriptions-item:
+  get:
+    tags: [Room Type Descriptions]
+    summary: Obtener descripción
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+
+item-descriptions:
+  put:
+    tags: [Room Type Descriptions]
+    summary: Actualizar descripción de un tipo de habitación
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              language_id:  { type: string }
+              name:         { type: string }
+              description:  { type: string }
+    responses:
+      '200':
+        description: Actualizada
+
+services-collection:
+  get:
+    tags: [Room Type Services]
+    summary: Listar servicios de tipos de habitación
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: room_type_id
+        in: query
+        schema: { type: integer }
+      - name: service_id
+        in: query
+        schema: { type: integer }
+    responses:
+      '200':
+        description: OK
+
+  post:
+    tags: [Room Type Services]
+    summary: Agregar servicios a un tipo de habitación (syncWithoutDetaching)
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_type_id, service_ids]
+            properties:
+              room_type_id: { type: integer }
+              service_ids:
+                type: array
+                items: { type: integer }
+                example: [1, 2, 3]
+    responses:
+      '201':
+        description: Servicios agregados
+
+  delete:
+    tags: [Room Type Services]
+    summary: Eliminar un servicio de un tipo de habitación
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_type_service_id]
+            properties:
+              room_type_service_id: { type: integer }
+    responses:
+      '200':
+        description: Eliminado
+
+services-item:
+  get:
+    tags: [Room Type Services]
+    summary: Obtener relación servicio-tipo de habitación
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+
+item-services:
+  put:
+    tags: [Room Type Services]
+    summary: Sincronizar servicios de un tipo de habitación (sync — reemplaza todos)
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [service_ids]
+            properties:
+              service_ids:
+                type: array
+                items: { type: integer }
+                example: [1, 4, 7]
+    responses:
+      '200':
+        description: Servicios sincronizados
+
+beds-collection:
+  get:
+    tags: [Room Type Beds]
+    summary: Listar configuraciones de camas
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: room_type_id
+        in: query
+        schema: { type: integer }
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum: [single, double, twin, queen, king, sofa_bed, bunk]
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeBedCollection'
+
+  post:
+    tags: [Room Type Beds]
+    summary: Agregar cama a un tipo de habitación
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreRoomTypeBedRequest'
+    responses:
+      '201':
+        description: Creada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeBedResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Room Type Beds]
+    summary: Eliminar configuración de cama
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [room_type_bed_id]
+            properties:
+              room_type_bed_id:
+                type: integer
+                example: 1
+    responses:
+      '200':
+        description: Eliminada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeletedRoomTypeBedResponse'
+
+beds-item:
+  get:
+    tags: [Room Type Beds]
+    summary: Obtener configuración de cama
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeBedResource'
+
+  put:
+    tags: [Room Type Beds]
+    summary: Actualizar configuración de cama
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateRoomTypeBedRequest'
+    responses:
+      '200':
+        description: Actualizada
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomTypeBedResource'

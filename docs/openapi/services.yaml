@@ -1,0 +1,88 @@
+collection:
+  get:
+    tags: [Services]
+    summary: Listar servicios
+    parameters:
+      - $ref: '#/components/parameters/LimitParam'
+      - $ref: '#/components/parameters/OffsetParam'
+      - name: type
+        in: query
+        schema:
+          type: string
+          enum: [general, room, bathroom, accessibility, kitchen]
+      - name: enabled
+        in: query
+        schema: { type: boolean }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceCollection'
+
+  post:
+    tags: [Services]
+    summary: Crear servicio
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreServiceRequest'
+    responses:
+      '201':
+        description: Creado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceResource'
+
+  delete:
+    tags: [Services]
+    summary: Eliminar servicio
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [service_id]
+            properties:
+              service_id: { type: integer }
+    responses:
+      '200':
+        description: Eliminado
+
+item:
+  get:
+    tags: [Services]
+    summary: Obtener servicio
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceResource'
+
+  put:
+    tags: [Services]
+    summary: Actualizar servicio
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/UpdateServiceRequest'
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceResource'
