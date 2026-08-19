@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-use Illuminate\Http\Request;
-use App\Models\RoomAvailability;
+use App\Http\Requests\DestroyRoomAvailabilityRequest;
 use App\Http\Requests\StoreRoomAvailabilityRequest;
 use App\Http\Requests\UpdateRoomAvailabilityRequest;
-use App\Http\Requests\DestroyRoomAvailabilityRequest;
 use App\Http\Resources\V1\RoomAvailabilityResource;
 use App\Http\Resources\V1\RoomAvailabilityResourceCollection;
+use App\Models\RoomAvailability;
 use App\Repositories\Contracts\RoomAvailabilityInterface;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class RoomAvailabilityRepository implements RoomAvailabilityInterface
 {
@@ -22,18 +22,18 @@ class RoomAvailabilityRepository implements RoomAvailabilityInterface
         $offset = $request->offset ?: 0;
 
         $availability = RoomAvailability::when($request->room_type_id, function ($q, $room_type_id) {
-                            return $q->where('room_type_id', $room_type_id);
-                        })
-                        ->when($request->date_from, function ($q, $date_from) {
-                            return $q->where('date', '>=', $date_from);
-                        })
-                        ->when($request->date_to, function ($q, $date_to) {
-                            return $q->where('date', '<=', $date_to);
-                        })
-                        ->orderBy('date')
-                        ->offset($offset)
-                        ->limit($limit)
-                        ->get();
+            return $q->where('room_type_id', $room_type_id);
+        })
+            ->when($request->date_from, function ($q, $date_from) {
+                return $q->where('date', '>=', $date_from);
+            })
+            ->when($request->date_to, function ($q, $date_to) {
+                return $q->where('date', '<=', $date_to);
+            })
+            ->orderBy('date')
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
 
         return new RoomAvailabilityResourceCollection($availability);
     }
@@ -41,6 +41,7 @@ class RoomAvailabilityRepository implements RoomAvailabilityInterface
     public function find($id)
     {
         $availability = RoomAvailability::with('roomType')->find($id);
+
         return new RoomAvailabilityResource($availability);
     }
 
@@ -49,16 +50,16 @@ class RoomAvailabilityRepository implements RoomAvailabilityInterface
         $limit = $request->limit ?: 30;
 
         $availability = RoomAvailability::when($request->room_type_id, function ($q, $room_type_id) {
-                            return $q->where('room_type_id', $room_type_id);
-                        })
-                        ->when($request->date_from, function ($q, $date_from) {
-                            return $q->where('date', '>=', $date_from);
-                        })
-                        ->when($request->date_to, function ($q, $date_to) {
-                            return $q->where('date', '<=', $date_to);
-                        })
-                        ->orderBy('date')
-                        ->paginate($limit);
+            return $q->where('room_type_id', $room_type_id);
+        })
+            ->when($request->date_from, function ($q, $date_from) {
+                return $q->where('date', '>=', $date_from);
+            })
+            ->when($request->date_to, function ($q, $date_to) {
+                return $q->where('date', '<=', $date_to);
+            })
+            ->orderBy('date')
+            ->paginate($limit);
 
         return new RoomAvailabilityResourceCollection($availability);
     }
@@ -91,6 +92,7 @@ class RoomAvailabilityRepository implements RoomAvailabilityInterface
     {
         $availability = RoomAvailability::find($id);
         $availability->update($request->all());
+
         return new RoomAvailabilityResource($availability);
     }
 
@@ -98,6 +100,7 @@ class RoomAvailabilityRepository implements RoomAvailabilityInterface
     {
         $availability = RoomAvailability::find($request->room_availability_id);
         $availability->delete();
+
         return new RoomAvailabilityResource($availability);
     }
 }

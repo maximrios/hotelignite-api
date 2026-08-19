@@ -21,11 +21,11 @@ class Plan extends Model
     ];
 
     protected $casts = [
-        'price'      => 'integer',
+        'price' => 'integer',
         'trial_days' => 'integer',
         'sort_order' => 'integer',
-        'is_public'  => 'boolean',
-        'enabled'    => 'boolean',
+        'is_public' => 'boolean',
+        'enabled' => 'boolean',
     ];
 
     public function accounts()

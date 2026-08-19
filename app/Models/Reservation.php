@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToAccommodation;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class Reservation extends Model
 {
-    use HasUuids;
+    use BelongsToAccommodation, HasUuids;
 
     protected $fillable = [
         'accommodation_id',
@@ -40,10 +41,10 @@ class Reservation extends Model
     ];
 
     protected $casts = [
-        'checkin_date'  => 'date',
+        'checkin_date' => 'date',
         'checkout_date' => 'date',
-        'deposit_date'  => 'date',
-        'cancelled_at'  => 'datetime',
+        'deposit_date' => 'date',
+        'cancelled_at' => 'datetime',
     ];
 
     public function accommodation()
@@ -84,7 +85,7 @@ class Reservation extends Model
 
     public function getNightsAttribute(): int
     {
-        if (!$this->checkin_date || !$this->checkout_date) {
+        if (! $this->checkin_date || ! $this->checkout_date) {
             return 0;
         }
 

@@ -6,12 +6,20 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+    /**
+     * Pivote City ↔ Tour. Sin FKs: en la BD legacy `cities.id` y `tours.id` son
+     * `int`, incompatibles con el `bigint unsigned` de `foreignId()`.
+     */
     public function up(): void
     {
+        if (Schema::hasTable('city_tour')) {
+            return;
+        }
+
         Schema::create('city_tour', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('city_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('tour_id')->constrained()->cascadeOnDelete();
+            $table->unsignedBigInteger('city_id')->index();
+            $table->unsignedBigInteger('tour_id')->index();
             $table->timestamps();
             $table->unique(['city_id', 'tour_id']);
         });

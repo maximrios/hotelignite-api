@@ -9,5 +9,6 @@ use Illuminate\Http\Request;
 interface TourInterface
 {
     public function all(Request $request);
+
     public function find($id);
 }

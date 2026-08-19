@@ -21,12 +21,12 @@ class RoomAvailability extends Model
     ];
 
     protected $casts = [
-        'date'                => 'date',
-        'closed'              => 'boolean',
-        'closed_to_arrival'   => 'boolean',
+        'date' => 'date',
+        'closed' => 'boolean',
+        'closed_to_arrival' => 'boolean',
         'closed_to_departure' => 'boolean',
-        'min_stay'            => 'integer',
-        'max_stay'            => 'integer',
+        'min_stay' => 'integer',
+        'max_stay' => 'integer',
     ];
 
     public function roomType()

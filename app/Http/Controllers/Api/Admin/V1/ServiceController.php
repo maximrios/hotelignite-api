@@ -2,18 +2,28 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
+use App\Http\Requests\SearchServiceRequest;
+use App\Http\Requests\StoreServiceRequest;
+use App\Http\Requests\UpdateServiceRequest;
+use App\Http\Resources\V1\ServiceResource;
 use App\Models\Service;
 use App\Repositories\Contracts\ServiceInterface;
-use App\Http\Requests\StoreServiceRequest;
-use App\Http\Resources\V1\ServiceResource;
-use App\Http\Requests\SearchServiceRequest;
-use App\Http\Requests\UpdateServiceRequest;
-use App\Http\Requests\DestroyServiceRequest;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Routing\Controller as BaseController;
 
+/**
+ * Catálogo global de servicios para el CRM (`docs/services-admin-crud-plan.md`).
+ *
+ * `index` y `show` son abiertos a cualquier usuario del panel —los necesita
+ * quien edita un alojamiento—; la escritura está detrás de `platform`, porque
+ * el catálogo es compartido por todas las cuentas.
+ *
+ * Las escrituras devuelven el Resource sin `response()->json()` a propósito: así
+ * pasa por `toResponse()` y sale envuelto en `data`, que es lo que consume el
+ * CRM (`res.data.id`).
+ */
 class ServiceController extends BaseController
 {
-
     protected ServiceInterface $serviceInterface;
 
     public function __construct(ServiceInterface $serviceInterface)
@@ -24,32 +34,31 @@ class ServiceController extends BaseController
     public function index(SearchServiceRequest $request)
     {
         $services = $this->serviceInterface->search($request);
+
         return response()->json($services, 200);
     }
 
     public function show(Service $service)
     {
-        return new ServiceResource($service);
+        return new ServiceResource($service->loadCount('accommodations'));
     }
 
-    public function update(UpdateServiceRequest $request, $id)
+    public function store(StoreServiceRequest $request): JsonResponse
     {
-        $service = $this->serviceInterface->update($id, $request);
-        return response()->json($service, 200);
+        return $this->serviceInterface->store($request)
+            ->response()
+            ->setStatusCode(201);
     }
 
-    public function store(StoreServiceRequest $request)
+    public function update(UpdateServiceRequest $request, Service $service)
     {
-        $service = $this->serviceInterface->store($request);
-        return response()->json($service, 200);
+        return $this->serviceInterface->update($service, $request);
     }
 
-    public function destroy(DestroyServiceRequest $request)
+    public function destroy(Service $service): JsonResponse
     {
-        $service = $this->serviceInterface->destroy($request);
-        return response()->json([
-            'message' => 'Service deleted successfully',
-            'data' => $service
-        ], 200);
+        $this->serviceInterface->remove($service);
+
+        return response()->json(null, 204);
     }
 }

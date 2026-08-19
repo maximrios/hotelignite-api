@@ -56,7 +56,12 @@ class Kernel extends HttpKernel
     protected $routeMiddleware = [
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
+        'auth.client' => \App\Http\Middleware\AuthenticateApiClient::class,
+        'client.ability' => \App\Http\Middleware\EnsureClientAbility::class,
+        'json.response' => \App\Http\Middleware\ForceJsonResponse::class,
         'client.readonly' => \App\Http\Middleware\EnsureNotReadOnlyClient::class,
+        'client.user' => \App\Http\Middleware\EnsureClientUser::class,
+        'platform' => \App\Http\Middleware\EnsurePlatform::class,
         'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
         'can' => \Illuminate\Auth\Middleware\Authorize::class,

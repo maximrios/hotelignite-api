@@ -4,24 +4,24 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-use Illuminate\Http\Request;
-use App\Models\AccommodationPolicy;
+use App\Http\Requests\DestroyAccommodationPolicyRequest;
 use App\Http\Requests\StoreAccommodationPolicyRequest;
 use App\Http\Requests\UpdateAccommodationPolicyRequest;
-use App\Http\Requests\DestroyAccommodationPolicyRequest;
 use App\Http\Resources\V1\AccommodationPolicyResource;
 use App\Http\Resources\V1\AccommodationPolicyResourceCollection;
+use App\Models\AccommodationPolicy;
 use App\Repositories\Contracts\AccommodationPolicyInterface;
+use Illuminate\Http\Request;
 
 class AccommodationPolicyRepository implements AccommodationPolicyInterface
 {
     public function search(Request $request): AccommodationPolicyResourceCollection
     {
-        $limit  = $request->limit ?? 10;
+        $limit = $request->limit ?? 10;
         $offset = $request->offset ?? 0;
 
         $query = AccommodationPolicy::with(['accommodation', 'translations'])
-            ->when($request->accommodation_id, fn($q, $id) => $q->where('accommodation_id', $id));
+            ->when($request->accommodation_id, fn ($q, $id) => $q->where('accommodation_id', $id));
 
         $results = $query->offset($offset)->limit($limit)->paginate($limit);
 
@@ -31,6 +31,7 @@ class AccommodationPolicyRepository implements AccommodationPolicyInterface
     public function find(int $id): AccommodationPolicyResource
     {
         $policy = AccommodationPolicy::with(['accommodation', 'translations'])->findOrFail($id);
+
         return new AccommodationPolicyResource($policy);
     }
 
@@ -38,6 +39,7 @@ class AccommodationPolicyRepository implements AccommodationPolicyInterface
     {
         $policy = AccommodationPolicy::create($request->validated());
         $policy->load(['accommodation', 'translations']);
+
         return new AccommodationPolicyResource($policy);
     }
 
@@ -46,6 +48,7 @@ class AccommodationPolicyRepository implements AccommodationPolicyInterface
         $policy = AccommodationPolicy::findOrFail($id);
         $policy->update($request->validated());
         $policy->load(['accommodation', 'translations']);
+
         return new AccommodationPolicyResource($policy);
     }
 
@@ -53,6 +56,7 @@ class AccommodationPolicyRepository implements AccommodationPolicyInterface
     {
         $policy = AccommodationPolicy::findOrFail($request->accommodation_policy_id);
         $policy->delete();
+
         return new AccommodationPolicyResource($policy);
     }
 }

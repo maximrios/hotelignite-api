@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\DestroyRoomTypeDescriptionRequest;
+use App\Http\Requests\StoreRoomTypeDescriptionRequest;
+use App\Http\Requests\UpdateRoomTypeDescriptionRequest;
+use App\Http\Resources\V1\RoomTypeDescriptionResource;
+use App\Http\Resources\V1\RoomTypeDescriptionResourceCollection;
 use App\Models\RoomType;
 use App\Models\RoomTypeDescription;
-use App\Http\Requests\StoreRoomTypeDescriptionRequest;
-use App\Http\Resources\V1\RoomTypeDescriptionResource;
-use App\Http\Requests\DestroyRoomTypeDescriptionRequest;
-use App\Http\Requests\UpdateRoomTypeDescriptionRequest;
 use App\Repositories\Contracts\RoomTypeDescriptionInterface;
-use App\Http\Resources\V1\RoomTypeDescriptionResourceCollection;
+use Illuminate\Http\Request;
 
 class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
 {
@@ -22,14 +22,14 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
         $offset = ($request->offset) ? $request->offset : 0;
 
         $roomTypeDescriptions = RoomTypeDescription::when($request->room_type_id, function ($q, $room_type_id) {
-                                return $q->where('room_type_id', $room_type_id);
-                            })
-                            ->when($request->language_id, function ($q, $language_id) {
-                                return $q->where('language_id', $language_id);
-                            })
-                            ->offset($offset)
-                            ->limit($limit)
-                            ->get();
+            return $q->where('room_type_id', $room_type_id);
+        })
+            ->when($request->language_id, function ($q, $language_id) {
+                return $q->where('language_id', $language_id);
+            })
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
 
         return new RoomTypeDescriptionResourceCollection($roomTypeDescriptions);
     }
@@ -37,6 +37,7 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
     public function find($id)
     {
         $roomTypeDescription = RoomTypeDescription::with('roomType')->find($id);
+
         return new RoomTypeDescriptionResource($roomTypeDescription);
     }
 
@@ -46,14 +47,14 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
         $offset = ($request->offset) ? $request->offset : 0;
 
         $roomTypeDescriptions = RoomTypeDescription::when($request->room_type_id, function ($q, $room_type_id) {
-                                return $q->where('room_type_id', $room_type_id);
-                            })
-                            ->when($request->language_id, function ($q, $language_id) {
-                                return $q->where('language_id', $language_id);
-                            })
-                            ->offset($offset)
-                            ->limit($limit)
-                            ->paginate();
+            return $q->where('room_type_id', $room_type_id);
+        })
+            ->when($request->language_id, function ($q, $language_id) {
+                return $q->where('language_id', $language_id);
+            })
+            ->offset($offset)
+            ->limit($limit)
+            ->paginate();
 
         return new RoomTypeDescriptionResourceCollection($roomTypeDescriptions);
     }
@@ -61,8 +62,8 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
     public function update($id, UpdateRoomTypeDescriptionRequest $request): RoomTypeDescriptionResourceCollection
     {
         $roomType = RoomType::find($id);
-        
-        if (!$roomType) {
+
+        if (! $roomType) {
             throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Room type not found');
         }
 
@@ -78,7 +79,7 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
                 // Actualizar la descripción si existe
                 $roomTypeDescription->update([
                     'name' => $descriptionData['name'],
-                    'description' => $descriptionData['description']
+                    'description' => $descriptionData['description'],
                 ]);
                 $updatedDescriptions[] = $roomTypeDescription;
             } else {
@@ -100,8 +101,8 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
     public function store(StoreRoomTypeDescriptionRequest $request): RoomTypeDescriptionResourceCollection
     {
         $roomType = RoomType::find($request->room_type_id);
-        
-        if (!$roomType) {
+
+        if (! $roomType) {
             throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Room type not found');
         }
 
@@ -113,7 +114,7 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
                 ->where('language_id', $descriptionData['language_id'])
                 ->first();
 
-            if (!$existingDescription) {
+            if (! $existingDescription) {
                 $newDescription = RoomTypeDescription::create([
                     'room_type_id' => $request->room_type_id,
                     'language_id' => $descriptionData['language_id'],
@@ -125,7 +126,7 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
                 // Si existe, actualizar la descripción
                 $existingDescription->update([
                     'name' => $descriptionData['name'],
-                    'description' => $descriptionData['description']
+                    'description' => $descriptionData['description'],
                 ]);
                 $createdDescriptions[] = $existingDescription;
             }
@@ -139,7 +140,7 @@ class RoomTypeDescriptionRepository implements RoomTypeDescriptionInterface
     {
         $roomTypeDescription = RoomTypeDescription::find($request->room_type_description_id);
         $roomTypeDescription->delete();
+
         return new RoomTypeDescriptionResource($roomTypeDescription);
     }
 }
-

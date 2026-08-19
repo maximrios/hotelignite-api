@@ -64,10 +64,44 @@ Enforcement con **scoping explícito** en controladores/repos + Policies, **no**
 - [x] B5 `AccommodationPolicy` + registro en `AuthServiceProvider`
 - [x] B6 Scoping en controladores Accommodation (Admin/V1) + scope `Accommodation::visibleTo()`
 - [x] B7 Middleware `client.readonly` (`EnsureNotReadOnlyClient`) en grupos auth de api.php/pms.php
-- [ ] B8 Tenencia en recursos hijos (rooms, room-types, rates, availability, etc.) — PENDIENTE. Patrón: scopear por `accommodation.account_id` del padre; para writes, `authorize` contra el accommodation dueño. Superficie grande; candidato a sub-fase propia.
+- [~] B8 Tenencia en recursos hijos — **anillo 1 parcial HECHO** (2026-07-12). Ver detalle abajo.
 - [x] C9 Throttle en login (`throttle:login`, 5/min por email+IP) + `channels` bajo `throttle:api`
 - [x] C10 Expiración de tokens (`SANCTUM_TOKEN_EXPIRATION`, default 1440 min) + revocación al cambiar password
 - [x] C11 Abilities por user_type en login (client → `['read']`, resto → `['*']`)
 - [x] C12 CORS por env (`CORS_ALLOWED_ORIGINS`), paths `api/*`+`pms/*` (sin `*` ni localhost hardcodeado)
 - [x] D13 `routes/pms.php` deshabilitado (rutas rotas/sin uso: middleware `client` inexistente + controller ausente)
 - [x] E14 Feature tests de tenencia (`tests/Feature/AccommodationTenancyTest.php`, 10 tests, usa `DatabaseTransactions`)
+
+---
+
+## B8 — Tenencia en recursos hijos
+
+Mapa de la superficie, en anillos según cómo cada modelo llega al alojamiento dueño:
+
+- **Anillo 1** (columna `accommodation_id` propia): Room, RoomType, AccommodationDescription, AccommodationService, AccommodationPolicy, AccommodationPolicyOld, AccommodationRatePolicy, Reservation, Booking, Inquiry.
+- **Anillo 2** (vía `room_type_id`): RoomTypeBed, RoomTypeDescription, RoomTypeService, RatePlan, RoomAvailability.
+- **Anillo 3**: Rate (`rate_plan_id` → RatePlan → RoomType) y AccommodationPolicyTranslation (`policy_id` → AccommodationPolicy).
+- **Catálogos globales** (Service, Policy, Channel, City, Tour, TravelAgency, AccommodationType, AccountType, Plan): no son de nadie. Hoy cualquier usuario autenticado puede crear/editar/borrar catálogo de toda la plataforma — la escritura debe quedar bajo `platform`.
+- **Account**: `GET /v1/accounts` lista todas las cuentas; escritura abierta. Lectura → scopear a la propia; escritura → `platform`.
+
+### Patrón
+
+1. Trait `App\Models\Concerns\BelongsToAccommodation`: cada modelo declara sólo su padre inmediato (`accommodationParent()`); la cadena se resuelve por recursión. Aporta `scopeVisibleTo($user)` — apoyado en `Accommodation::visibleTo()`, para que la definición de "qué veo" viva en un solo lugar — y `owningAccommodation()`.
+2. `App\Policies\ChildOfAccommodationPolicy`: única policy para todos los hijos; resuelve el alojamiento dueño y delega en `AccommodationPolicy` (leer el hijo = ver el padre; escribirlo = editar el padre). De ahí sale gratis que los clients sean read-only.
+3. Trait `App\Repositories\Concerns\ScopesToAccommodation`: `tenant()`, `writableAccommodation()` (exige poder editar el padre) y `visibleAccommodation()` (sólo verlo — es lo que corresponde cuando un portal B2B crea una pre-reserva).
+4. En cada repo: listados y `find()` scopeados (404 en vez de 403 en cross-tenant, para no delatar la existencia del recurso); en `store`, el padre se resuelve contra `visibleTo()` y nunca se confía en el `accommodation_id` del payload; en `update`, se descarta `accommodation_id` (mudar un recurso a otro alojamiento es cambiarle el dueño, no editarlo).
+5. `$request->all()` → `$request->validated()` en los repos: con `all()` cualquier campo fillable era mass-assignable, incluido el FK del dueño.
+
+### Estado
+
+- [x] Anillo 1: **Room, RoomType, Reservation, Booking** (repos scopeados, policy registrada, `validated()`).
+- [ ] Anillo 1, resto: AccommodationDescription, AccommodationService, AccommodationPolicy, AccommodationPolicyOld, AccommodationRatePolicy, Inquiry.
+- [ ] Anillo 2 y 3.
+- [ ] Catálogos globales + Account bajo `platform`.
+- [x] Tests: `tests/Feature/ChildResourceTenancyTest.php` (13 verdes, 1 skipped).
+
+### Hallazgos abiertos (fuera del alcance de B8)
+
+1. **Divergencia de esquema en `rooms` y `room_types`** — la DB (restaurada de un backup viejo) usa `created`/`modified` en vez de timestamps de Eloquent, y no tiene varias columnas que los modelos declaran fillable (`size`, `max_occupancy`, `slug`, `status`, `floor`, `notes`). Cualquier `Room::create()` / `update()` explota con `Unknown column 'updated_at'`: **`POST`/`PUT` de rooms y room-types están rotos hoy**, con o sin tenencia. Bloquea el test `account_user_no_puede_mudar_su_room_a_otro_alojamiento` (skipped).
+2. **`POST /admin/v1/accommodations` sin `city_id` devuelve 500**, no 422: la columna es `NOT NULL` sin default y la Form Request no la exige.
+3. **¿Un client B2B debería ver las reservas del hotel?** Con la policy actual, un usuario `user_type=client` con token Sanctum podría leer las reservas (con datos de los huéspedes) de todos los alojamientos relacionados. Hoy no es alcanzable — los clients entran por API key y `routes/client-api.php` no expone reservas — pero conviene decidirlo antes de que exista el primer client user.

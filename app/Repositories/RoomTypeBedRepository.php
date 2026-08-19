@@ -4,27 +4,27 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-use Illuminate\Http\Request;
-use App\Models\RoomTypeBed;
+use App\Http\Requests\DestroyRoomTypeBedRequest;
 use App\Http\Requests\StoreRoomTypeBedRequest;
 use App\Http\Requests\UpdateRoomTypeBedRequest;
-use App\Http\Requests\DestroyRoomTypeBedRequest;
 use App\Http\Resources\V1\RoomTypeBedResource;
 use App\Http\Resources\V1\RoomTypeBedResourceCollection;
+use App\Models\RoomTypeBed;
 use App\Repositories\Contracts\RoomTypeBedInterface;
+use Illuminate\Http\Request;
 
 class RoomTypeBedRepository implements RoomTypeBedInterface
 {
     public function all(Request $request)
     {
-        $limit  = $request->limit  ?: 10;
+        $limit = $request->limit ?: 10;
         $offset = $request->offset ?: 0;
 
         $beds = RoomTypeBed::when($request->room_type_id, fn ($q, $v) => $q->where('room_type_id', $v))
-                           ->when($request->type, fn ($q, $v) => $q->where('type', $v))
-                           ->offset($offset)
-                           ->limit($limit)
-                           ->get();
+            ->when($request->type, fn ($q, $v) => $q->where('type', $v))
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
 
         return new RoomTypeBedResourceCollection($beds);
     }
@@ -32,6 +32,7 @@ class RoomTypeBedRepository implements RoomTypeBedInterface
     public function find($id)
     {
         $bed = RoomTypeBed::with('roomType')->find($id);
+
         return new RoomTypeBedResource($bed);
     }
 
@@ -40,8 +41,8 @@ class RoomTypeBedRepository implements RoomTypeBedInterface
         $limit = $request->limit ?: 10;
 
         $beds = RoomTypeBed::when($request->room_type_id, fn ($q, $v) => $q->where('room_type_id', $v))
-                           ->when($request->type, fn ($q, $v) => $q->where('type', $v))
-                           ->paginate($limit);
+            ->when($request->type, fn ($q, $v) => $q->where('type', $v))
+            ->paginate($limit);
 
         return new RoomTypeBedResourceCollection($beds);
     }
@@ -49,6 +50,7 @@ class RoomTypeBedRepository implements RoomTypeBedInterface
     public function store(StoreRoomTypeBedRequest $request): RoomTypeBedResource
     {
         $bed = RoomTypeBed::create($request->all());
+
         return new RoomTypeBedResource($bed->load('roomType'));
     }
 
@@ -56,6 +58,7 @@ class RoomTypeBedRepository implements RoomTypeBedInterface
     {
         $bed = RoomTypeBed::find($id);
         $bed->update($request->all());
+
         return new RoomTypeBedResource($bed->load('roomType'));
     }
 
@@ -63,6 +66,7 @@ class RoomTypeBedRepository implements RoomTypeBedInterface
     {
         $bed = RoomTypeBed::find($request->room_type_bed_id);
         $bed->delete();
+
         return new RoomTypeBedResource($bed);
     }
 }

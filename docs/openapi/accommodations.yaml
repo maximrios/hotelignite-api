@@ -99,7 +99,12 @@ item-by-slug:
 item:
   put:
     tags: [Accommodations]
-    summary: Actualizar alojamiento
+    summary: Actualizar alojamiento (legacy)
+    description: |
+      Endpoint legacy de `/api/v1`. **El PMS no lo usa**: edita vía
+      `PATCH /api/admin/v1/accommodations/{id}`, que tiene policy de tenencia,
+      semántica parcial real y acepta `latitude`/`longitude`. Ver
+      `docs/openapi-admin.yaml`.
     parameters:
       - $ref: '#/components/parameters/IdPath'
     requestBody:

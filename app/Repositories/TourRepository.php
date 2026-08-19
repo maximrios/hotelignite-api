@@ -6,9 +6,9 @@ namespace App\Repositories;
 
 use App\Http\Resources\V1\TourResource;
 use App\Http\Resources\V1\TourResourceCollection;
-use Illuminate\Http\Request;
 use App\Models\Tour;
 use App\Repositories\Contracts\TourInterface;
+use Illuminate\Http\Request;
 
 class TourRepository implements TourInterface
 {
@@ -26,11 +26,14 @@ class TourRepository implements TourInterface
         }
 
         $tours = $query->get();
+
         return new TourResourceCollection($tours);
     }
+
     public function find($id)
     {
         $tour = Tour::find($id);
+
         return new TourResource($tour);
     }
 }

@@ -2,17 +2,24 @@ collection:
   get:
     tags: [Services]
     summary: Listar servicios
+    description: |
+      El catálogo es **global** (no cuelga de ninguna cuenta) y se ordena por
+      `name`. No hay filtro por `type`: los únicos que aplica el repositorio son
+      `name` (LIKE parcial) y `enabled`.
+
+      La escritura de este catálogo vive en `/api/admin/v1/services` y exige un
+      usuario `platform` — ver `docs/services-admin-crud-plan.md`. Los verbos de
+      escritura de acá son el camino legacy.
     parameters:
-      - $ref: '#/components/parameters/LimitParam'
-      - $ref: '#/components/parameters/OffsetParam'
-      - name: type
+      - name: name
         in: query
-        schema:
-          type: string
-          enum: [general, room, bathroom, accessibility, kitchen]
+        description: Coincidencia parcial (LIKE `%name%`)
+        schema: { type: string }
       - name: enabled
         in: query
         schema: { type: boolean }
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/PageParam'
     responses:
       '200':
         description: OK
@@ -24,6 +31,9 @@ collection:
   post:
     tags: [Services]
     summary: Crear servicio
+    description: |
+      Devuelve **200 y el recurso sin envoltorio `data`** (el equivalente de
+      `admin/v1` sí responde 201 con `data`).
     requestBody:
       required: true
       content:
@@ -31,16 +41,24 @@ collection:
           schema:
             $ref: '#/components/schemas/StoreServiceRequest'
     responses:
-      '201':
+      '200':
         description: Creado
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ServiceResource'
+      '422':
+        $ref: '#/components/responses/ValidationError'
 
   delete:
     tags: [Services]
     summary: Eliminar servicio
+    description: |
+      Firma legacy: el id viaja en el cuerpo. **No valida que el servicio esté
+      en uso**, así que puede dejar huérfanas las filas de
+      `accommodation_services` (no hay FK con `ON DELETE CASCADE`). La baja
+      segura es `DELETE /api/admin/v1/services/{service}`, que responde 409 en
+      ese caso.
     requestBody:
       required: true
       content:

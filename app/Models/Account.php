@@ -26,9 +26,9 @@ class Account extends Model
     ];
 
     protected $casts = [
-        'active'          => 'boolean',
-        'test'            => 'boolean',
-        'agreement'       => 'boolean',
+        'active' => 'boolean',
+        'test' => 'boolean',
+        'agreement' => 'boolean',
         'expiration_date' => 'date',
     ];
 
@@ -50,5 +50,10 @@ class Account extends Model
     public function users()
     {
         return $this->hasMany(User::class);
+    }
+
+    public function documents()
+    {
+        return $this->morphMany(Document::class, 'documentable');
     }
 }

@@ -38,6 +38,11 @@ class AccommodationController extends BaseController
     {
         $this->authorize('view', $accommodation);
 
+        // Las mismas relaciones que carga el index: sin esto el Resource omite
+        // `city`, `state` y `type` (son `whenLoaded`), y el detalle devuelve
+        // menos campos que el listado para el mismo recurso.
+        $accommodation->load(['city', 'state', 'type']);
+
         return new AccommodationResource($accommodation);
     }
 

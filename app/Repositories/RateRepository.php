@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-use Illuminate\Http\Request;
-use App\Models\Rate;
+use App\Http\Requests\DestroyRateRequest;
 use App\Http\Requests\StoreRateRequest;
 use App\Http\Requests\UpdateRateRequest;
-use App\Http\Requests\DestroyRateRequest;
 use App\Http\Resources\V1\RateResource;
 use App\Http\Resources\V1\RateResourceCollection;
+use App\Models\Rate;
 use App\Repositories\Contracts\RateInterface;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class RateRepository implements RateInterface
 {
@@ -22,19 +22,19 @@ class RateRepository implements RateInterface
         $offset = $request->offset ?: 0;
 
         $rates = Rate::when($request->rate_plan_id, function ($q, $rate_plan_id) {
-                    return $q->where('rate_plan_id', $rate_plan_id);
-                })
-                ->when($request->date_from, function ($q, $date_from) {
-                    return $q->where('date', '>=', $date_from);
-                })
-                ->when($request->date_to, function ($q, $date_to) {
-                    return $q->where('date', '<=', $date_to);
-                })
-                ->with('ratePlan')
-                ->orderBy('date')
-                ->offset($offset)
-                ->limit($limit)
-                ->get();
+            return $q->where('rate_plan_id', $rate_plan_id);
+        })
+            ->when($request->date_from, function ($q, $date_from) {
+                return $q->where('date', '>=', $date_from);
+            })
+            ->when($request->date_to, function ($q, $date_to) {
+                return $q->where('date', '<=', $date_to);
+            })
+            ->with('ratePlan')
+            ->orderBy('date')
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
 
         return new RateResourceCollection($rates);
     }
@@ -42,6 +42,7 @@ class RateRepository implements RateInterface
     public function find($id)
     {
         $rate = Rate::with('ratePlan')->find($id);
+
         return new RateResource($rate);
     }
 
@@ -50,17 +51,17 @@ class RateRepository implements RateInterface
         $limit = $request->limit ?: 10;
 
         $rates = Rate::when($request->rate_plan_id, function ($q, $rate_plan_id) {
-                    return $q->where('rate_plan_id', $rate_plan_id);
-                })
-                ->when($request->date_from, function ($q, $date_from) {
-                    return $q->where('date', '>=', $date_from);
-                })
-                ->when($request->date_to, function ($q, $date_to) {
-                    return $q->where('date', '<=', $date_to);
-                })
-                ->with('ratePlan')
-                ->orderBy('date')
-                ->paginate($limit);
+            return $q->where('rate_plan_id', $rate_plan_id);
+        })
+            ->when($request->date_from, function ($q, $date_from) {
+                return $q->where('date', '>=', $date_from);
+            })
+            ->when($request->date_to, function ($q, $date_to) {
+                return $q->where('date', '<=', $date_to);
+            })
+            ->with('ratePlan')
+            ->orderBy('date')
+            ->paginate($limit);
 
         return new RateResourceCollection($rates);
     }
@@ -92,6 +93,7 @@ class RateRepository implements RateInterface
     {
         $rate = Rate::find($id);
         $rate->update($request->all());
+
         return new RateResource($rate);
     }
 
@@ -99,6 +101,7 @@ class RateRepository implements RateInterface
     {
         $rate = Rate::find($request->rate_id);
         $rate->delete();
+
         return new RateResource($rate);
     }
 }

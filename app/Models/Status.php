@@ -9,8 +9,9 @@ class Status extends Model
     protected $table = 'reservations_status';
 
     protected $fillable = [
-        'name'
+        'name',
     ];
+
     //
     public function accommodations()
     {

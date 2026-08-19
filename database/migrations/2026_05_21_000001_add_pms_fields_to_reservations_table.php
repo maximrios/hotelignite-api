@@ -2,54 +2,110 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
     public function up(): void
     {
+        // Idempotente: la tabla `reservations` legacy (del dump) ya trae algunas
+        // columnas equivalentes (ej. `adults`). Se agrega sólo lo que falte para
+        // no chocar con "Duplicate column" al aplicar sobre el esquema legacy.
         Schema::table('reservations', function (Blueprint $table) {
+            $missing = fn (string $col): bool => ! Schema::hasColumn('reservations', $col);
+
             // Identificación visible al huésped
-            $table->string('confirmation_number')->nullable()->unique()->after('id');
-            $table->string('source_reference')->nullable()->after('confirmation_number'); // nro. en OTA origen
+            if ($missing('confirmation_number')) {
+                $table->string('confirmation_number')->nullable()->unique()->after('id');
+            }
+            if ($missing('source_reference')) {
+                $table->string('source_reference')->nullable()->after('id'); // nro. en OTA origen
+            }
 
-            // Fechas de estancia
-            $table->date('checkin_date')->nullable()->after('room_id');
-            $table->date('checkout_date')->nullable()->after('checkin_date');
-            $table->time('checkin_time')->nullable()->after('checkout_date');
-            $table->time('checkout_time')->nullable()->after('checkin_time');
+            // Fechas de estancia (separadas de las legacy arrival/departure/checkin)
+            if ($missing('checkin_date')) {
+                $table->date('checkin_date')->nullable()->after('room_id');
+            }
+            if ($missing('checkout_date')) {
+                $table->date('checkout_date')->nullable()->after('room_id');
+            }
+            if ($missing('checkin_time')) {
+                $table->time('checkin_time')->nullable()->after('room_id');
+            }
+            if ($missing('checkout_time')) {
+                $table->time('checkout_time')->nullable()->after('room_id');
+            }
 
-            // Ocupación
-            $table->unsignedTinyInteger('adults')->default(1)->after('checkout_time');
-            $table->unsignedTinyInteger('children')->default(0)->after('adults');
-            $table->unsignedTinyInteger('extra_beds')->default(0)->after('children');
+            // Ocupación (adults ya existe en el legacy; children/extra_beds no)
+            if ($missing('adults')) {
+                $table->unsignedTinyInteger('adults')->default(1)->after('room_id');
+            }
+            if ($missing('children')) {
+                $table->unsignedTinyInteger('children')->default(0)->after('room_id');
+            }
+            if ($missing('extra_beds')) {
+                $table->unsignedTinyInteger('extra_beds')->default(0)->after('room_id');
+            }
 
             // Tarifa aplicada (en centavos)
-            $table->foreignId('rate_plan_id')->nullable()->constrained()->nullOnDelete()->after('extra_beds');
-            $table->unsignedInteger('rate_amount')->nullable()->after('rate_plan_id');
-            $table->unsignedInteger('total_amount')->nullable()->after('rate_amount');
-            $table->string('currency', 3)->default('ARS')->after('total_amount');
-            $table->unsignedInteger('commission_amount')->nullable()->after('currency');
+            if ($missing('rate_plan_id')) {
+                $table->foreignId('rate_plan_id')->nullable()->constrained()->nullOnDelete();
+            }
+            if ($missing('rate_amount')) {
+                $table->unsignedInteger('rate_amount')->nullable();
+            }
+            if ($missing('total_amount')) {
+                $table->unsignedInteger('total_amount')->nullable();
+            }
+            if ($missing('currency')) {
+                $table->string('currency', 3)->default('ARS');
+            }
+            if ($missing('commission_amount')) {
+                $table->unsignedInteger('commission_amount')->nullable();
+            }
 
             // Garantía y depósito
-            $table->enum('guarantee_type', ['credit_card', 'deposit', 'agency_voucher', 'none'])
-                  ->default('none')->after('commission_amount');
-            $table->unsignedInteger('deposit_amount')->nullable()->after('guarantee_type');
-            $table->date('deposit_date')->nullable()->after('deposit_amount');
+            if ($missing('guarantee_type')) {
+                $table->enum('guarantee_type', ['credit_card', 'deposit', 'agency_voucher', 'none'])->default('none');
+            }
+            if ($missing('deposit_amount')) {
+                $table->unsignedInteger('deposit_amount')->nullable();
+            }
+            if ($missing('deposit_date')) {
+                $table->date('deposit_date')->nullable();
+            }
 
             // Cancelación
-            $table->timestamp('cancelled_at')->nullable()->after('deposit_date');
-            $table->string('cancellation_reason')->nullable()->after('cancelled_at');
+            if ($missing('cancelled_at')) {
+                $table->timestamp('cancelled_at')->nullable();
+            }
+            if ($missing('cancellation_reason')) {
+                $table->string('cancellation_reason')->nullable();
+            }
 
             // Observaciones
-            $table->text('special_requests')->nullable()->after('cancellation_reason');
-            $table->text('internal_notes')->nullable()->after('special_requests');
-
-            // Índices para reporting y búsquedas frecuentes
-            $table->index('checkin_date');
-            $table->index('checkout_date');
-            $table->index('status_id');
+            if ($missing('special_requests')) {
+                $table->text('special_requests')->nullable();
+            }
+            if ($missing('internal_notes')) {
+                $table->text('internal_notes')->nullable();
+            }
         });
+
+        // Índices para reporting (idempotentes vía information_schema)
+        foreach (['checkin_date', 'checkout_date', 'status_id'] as $col) {
+            $indexName = "reservations_{$col}_index";
+            $exists = DB::table('information_schema.statistics')
+                ->where('table_schema', DB::raw('DATABASE()'))
+                ->where('table_name', 'reservations')
+                ->where('index_name', $indexName)
+                ->exists();
+
+            if (! $exists && Schema::hasColumn('reservations', $col)) {
+                Schema::table('reservations', fn (Blueprint $table) => $table->index($col, $indexName));
+            }
+        }
     }
 
     public function down(): void

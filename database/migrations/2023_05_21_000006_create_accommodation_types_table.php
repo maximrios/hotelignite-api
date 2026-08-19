@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Snapshot del esquema real de `accommodation_types` (tabla legacy del dump, formalizada).
+ * Idempotente: si la tabla ya existe (esta DB), es no-op. En una DB fresca la
+ * crea tal cual está hoy (ids ya convertidos a bigint donde correspondía).
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        if (Schema::hasTable('accommodation_types')) {
+            return;
+        }
+
+        DB::unprepared(<<<'SQL'
+CREATE TABLE `accommodation_types` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `name` varchar(255) CHARACTER SET utf8mb3 COLLATE utf8mb3_spanish_ci NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_spanish_ci
+SQL);
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('accommodation_types');
+    }
+};

@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToAccommodation;
 use Illuminate\Database\Eloquent\Model;
 
 class Room extends Model
 {
+    use BelongsToAccommodation;
+
     protected $fillable = [
         'room_type_id',
         'accommodation_id',
@@ -35,7 +38,7 @@ class Room extends Model
     public function isAvailable(): bool
     {
         return in_array($this->housekeeping_status, ['vc', 'vd'])
-            && !in_array($this->housekeeping_status, ['ooo', 'oos']);
+            && ! in_array($this->housekeeping_status, ['ooo', 'oos']);
     }
 
     public function isOutOfOrder(): bool

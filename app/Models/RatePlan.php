@@ -18,7 +18,7 @@ class RatePlan extends Model
 
     protected $casts = [
         'includes_breakfast' => 'boolean',
-        'enabled'            => 'boolean',
+        'enabled' => 'boolean',
     ];
 
     public function roomType()

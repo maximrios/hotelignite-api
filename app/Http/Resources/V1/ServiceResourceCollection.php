@@ -6,7 +6,6 @@ use Illuminate\Http\Resources\Json\ResourceCollection;
 
 class ServiceResourceCollection extends ResourceCollection
 {
-
     public $collects = ServiceResource::class;
 
     public function toArray($request)
@@ -19,10 +18,15 @@ class ServiceResourceCollection extends ResourceCollection
                     'per_page' => $this->perPage(),
                     'total' => $this->total(),
                     'last_page' => $this->lastPage(),
+                    // `from`/`to` completan la forma que espera `PagedResponse`
+                    // del CRM (y que ya devuelve el resto de admin/v1). Son
+                    // null en una página vacía, igual que en Laravel.
+                    'from' => $this->firstItem(),
+                    'to' => $this->lastItem(),
                 ],
             ];
         }
-        
+
         return ['data' => $this->collection];
     }
 }

@@ -9,7 +9,8 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 /**
  * Tenencia sobre Accommodation:
  * - platform: acceso total (bypass vía before()).
- * - account: CRUD solo sobre accommodations de su propia cuenta.
+ * - account: CRUD sobre accommodations de su cuenta, y si tiene un acotamiento
+ *   explícito (pivote accommodation_user), solo sobre esos.
  * - client: solo lectura, y solo de los accommodations relacionados (pivote).
  */
 class AccommodationPolicy
@@ -32,7 +33,8 @@ class AccommodationPolicy
     {
         if ($user->isAccount()) {
             return $user->account_id !== null
-                && (int) $accommodation->account_id === (int) $user->account_id;
+                && (int) $accommodation->account_id === (int) $user->account_id
+                && $user->accommodationScopeAllows((int) $accommodation->id);
         }
 
         if ($user->isClient()) {
@@ -54,7 +56,8 @@ class AccommodationPolicy
     {
         return $user->isAccount()
             && $user->account_id !== null
-            && (int) $accommodation->account_id === (int) $user->account_id;
+            && (int) $accommodation->account_id === (int) $user->account_id
+            && $user->accommodationScopeAllows((int) $accommodation->id);
     }
 
     public function delete(User $user, Accommodation $accommodation): bool

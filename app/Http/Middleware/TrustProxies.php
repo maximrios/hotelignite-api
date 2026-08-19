@@ -10,9 +10,13 @@ class TrustProxies extends Middleware
     /**
      * The trusted proxies for this application.
      *
+     * En producción la app corre detrás de nginx + Traefik dentro de la red de
+     * Docker (IPs dinámicas), así que se confía en el proxy directo para leer
+     * X-Forwarded-Proto/For y generar URLs https correctas.
+     *
      * @var array<int, string>|string|null
      */
-    protected $proxies;
+    protected $proxies = '*';
 
     /**
      * The headers that should be used to detect proxies.

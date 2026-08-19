@@ -1,0 +1,234 @@
+collection:
+  get:
+    tags: [Accommodations]
+    summary: Listar alojamientos
+    description: |
+      Devuelve los alojamientos **visibles para el usuario autenticado**
+      (`Accommodation::scopeVisibleTo`):
+
+      - `platform` — todos.
+      - `account` — los de su `account_id`, acotados por el pivote
+        `accommodation_user` si el usuario tiene alcance explícito.
+      - `client` — solo los relacionados vía el pivote `accommodation_client`.
+
+      La tenencia sale **del token**, nunca de un filtro del frontend.
+    parameters:
+      - name: limit
+        in: query
+        description: Elementos por página (default 15).
+        schema: { type: integer, default: 15, example: 15 }
+      - name: page
+        in: query
+        description: Página (paginador estándar de Laravel).
+        schema: { type: integer, example: 1 }
+      - name: search
+        in: query
+        description: Búsqueda por nombre (LIKE `%search%`).
+        schema: { type: string, example: "Ignite" }
+      - name: enabled
+        in: query
+        description: Filtra por publicados / despublicados. Si se omite, devuelve ambos.
+        schema: { type: boolean, example: true }
+      - name: account_id
+        in: query
+        description: |
+          Filtra por cuenta. **Solo lo aplica `platform`**; para el resto se
+          ignora (ya quedan scopeados por `visibleTo`).
+        schema: { type: integer, example: 3 }
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AccommodationCollection' }
+      '403':
+        $ref: '#/components/responses/Forbidden'
+
+  post:
+    tags: [Accommodations]
+    summary: Crear alojamiento
+    description: |
+      Requiere `create` en `AccommodationPolicy`: solo `platform` y usuarios
+      `account` con `account_id`. Un usuario `account` **no** puede elegir la
+      cuenta — se fuerza la suya. Un `client` recibe 403 (`client.readonly`
+      bloquea toda escritura).
+
+      El `slug` se genera solo a partir del `name` si no se envía.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/StoreAccommodationRequest' }
+    responses:
+      '200':
+        description: |
+          Creado. Devuelve `200`, no `201`: el controlador retorna el Resource
+          directamente y Laravel no cambia el status.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data: { $ref: '#/components/schemas/AccommodationResource' }
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+item:
+  parameters:
+    - name: id
+      in: path
+      required: true
+      description: ID del alojamiento.
+      schema: { type: integer, example: 1 }
+
+  get:
+    tags: [Accommodations]
+    summary: Obtener alojamiento
+    description: |
+      Carga `city`, `state` y `type`, así que la ficha devuelve los mismos
+      campos que el listado.
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data: { $ref: '#/components/schemas/AccommodationResource' }
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '404':
+        $ref: '#/components/responses/NotFound'
+
+  put:
+    tags: [Accommodations]
+    summary: Reemplazar alojamiento
+    description: |
+      Actualización completa. Acepta el mismo set de campos que el `PATCH`,
+      pero sus reglas no son `sometimes`.
+
+      **Para el PMS usá `PATCH`**, que tiene semántica parcial real.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/UpdateAccommodationRequest' }
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data: { $ref: '#/components/schemas/AccommodationResource' }
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  patch:
+    tags: [Accommodations]
+    summary: Actualizar alojamiento (parcial)
+    description: |
+      **Este es el endpoint que usa el PMS** para guardar la ficha del
+      establecimiento (paneles General, Ubicación y el toggle de publicación).
+
+      Semántica parcial real: cada regla es `sometimes`, así que solo se
+      persisten las claves presentes en el body. Las ausentes no se tocan.
+
+      ### Qué NO acepta
+      Todo campo fuera del schema `PatchAccommodationRequest` se **descarta en
+      silencio** (`$request->validated()` filtra por reglas) — no da 422, así
+      que el frontend cree que guardó. Los campos que el PMS manda hoy y que se
+      pierden, con su destino correcto:
+
+      | Enviado por el PMS | Estado | Dónde va realmente |
+      |---|---|---|
+      | `legal_name`, `stars`, `timezone`, `address2`, `landmark` | ✅ soportado | columnas agregadas en `2026_07_25_000001` |
+      | `tax_id` | descartado | usar **`tax_identification`** |
+      | `currency` | descartado | usar **`currency_id`** (char(4)) |
+      | `country` | descartado | usar **`country_id`** (char(50), ISO) |
+      | `language` | descartado | usar **`language_id`** (char(4)) |
+      | `checkin_from`, `checkin_to`, `checkout_from`, `checkout_to`, `min_age`, `allow_children`, `children_max_age`, `allow_pets`, `allow_smoking`, `allow_parties`, `payment_card`, `payment_cash`, `payment_transfer`, `payment_crypto` | descartado | tabla `accommodation_policies` → `/api/v1/accommodation-policies` |
+      | `house_rules` | descartado | tabla `accommodation_policy_translations` → `/api/v1/accommodation-policy-translations` |
+      | `rate_policies` | descartado | tabla `accommodation_rate_policies` → `/api/v1/accommodation-rate-policies` |
+
+      ### Restricciones de tenencia
+      - `account_id` solo lo respeta `platform`; para el resto se descarta, de
+        modo que nadie puede mover un alojamiento a otra cuenta.
+      - `client` recibe 403 antes de llegar al controlador (`client.readonly`).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/PatchAccommodationRequest' }
+          examples:
+            general:
+              summary: Panel General
+              value:
+                name: "Hotel Ignite Bariloche"
+                legal_name: "Ignite Hotelería S.A."
+                stars: 4
+                type_id: 4
+                email: "info@ignite.com"
+                phone: "+54 294 4000000"
+                web: "https://ignite.com"
+                currency_id: "ARS"
+                language_id: "es"
+                timezone: "America/Argentina/Bariloche"
+                tax_identification: "30-12345678-9"
+            ubicacion:
+              summary: Panel Ubicación
+              value:
+                address: "Av. Bustillo 1234"
+                address2: "Piso 2, Depto B"
+                landmark: "Frente al Centro Cívico"
+                city_id: 5
+                state_id: 18
+                country_id: "AR"
+                postal_code: "8400"
+                latitude: -41.133472
+                longitude: -71.310028
+            publicar:
+              summary: Toggle de publicación
+              value:
+                enabled: true
+    responses:
+      '200':
+        description: Actualizado
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data: { $ref: '#/components/schemas/AccommodationResource' }
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '404':
+        $ref: '#/components/responses/NotFound'
+      '422':
+        $ref: '#/components/responses/ValidationError'
+
+  delete:
+    tags: [Accommodations]
+    summary: Eliminar alojamiento
+    description: Requiere `delete` en `AccommodationPolicy` (mismas condiciones que `update`).
+    responses:
+      '200':
+        description: Eliminado
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                message: { type: string, example: "Accommodation deleted successfully" }
+      '403':
+        $ref: '#/components/responses/Forbidden'
+      '404':
+        $ref: '#/components/responses/NotFound'

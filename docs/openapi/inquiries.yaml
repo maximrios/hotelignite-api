@@ -1,0 +1,61 @@
+collection:
+  get:
+    tags: [Inquiries]
+    summary: Listar consultas recibidas
+    description: |
+      Consultas (leads) enviadas desde el motor web del alojamiento, ordenadas
+      por `created_at` descendente y **scopeadas por tenencia**: un usuario
+      `platform` ve todas; el resto sólo las de los alojamientos visibles para él
+      (`Inquiry::visibleTo()` → `Accommodation::visibleTo()`).
+
+      **La respuesta es un array JSON plano** — no viene envuelta en `data` ni
+      trae metadatos de paginación, aunque la consulta sí pagina (25 por página
+      por defecto). El único indicio de que hay más páginas es que lleguen
+      exactamente `per_page` elementos.
+    parameters:
+      - name: accommodation_id
+        in: query
+        description: Filtra por alojamiento. Sin él, devuelve todos los visibles.
+        schema: { type: integer }
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/PageParam'
+    responses:
+      '200':
+        description: OK
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InquiryCollection'
+      '401':
+        description: No autenticado
+
+  post:
+    tags: [Inquiries]
+    summary: Crear una consulta
+    description: |
+      Alta de una consulta desde el formulario del motor web.
+
+      **Las fechas entran en `d/m/Y`** (`01/08/2026`) y se persisten como
+      `Y-m-d`; enviarlas en ISO hace fallar el parseo. La consulta nace con
+      `status: new`.
+
+      Aunque el endpoint es el alta de un lead público, hoy está detrás de
+      `auth:sanctum` y de `client.readonly`: un usuario de tipo `client` recibe
+      **403**, porque para ellos toda la API es de sólo lectura.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StoreInquiryRequest'
+    responses:
+      '201':
+        description: Creada — devuelve el recurso sin envoltorio `data`
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InquiryResource'
+      '403':
+        description: El usuario es de tipo `client` (sólo lectura)
+      '422':
+        $ref: '#/components/responses/ValidationError'

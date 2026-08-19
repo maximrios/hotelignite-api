@@ -36,6 +36,26 @@ Every request flows: `Route → Controller → Repository (via Interface) → Mo
 
 ### Domain model map
 
+#### Cuentas (tenants hoteleros)
+- `Account` — el hotelero dueño de uno o más `Accommodation`. Usa SoftDeletes. Tiene `plan`, `accountType`, `accommodations` y `users`.
+
+**Hay dos CRUD de `Account` y no son intercambiables.** El bueno es
+`/api/admin/v1/accounts` (`Api\Admin\V1\AccountController`): tiene `AccountPolicy`,
+pagina como el resto de admin y su Resource **no expone `accounts.token`**.
+
+El legacy `/api/v1/accounts` (`Api\V1\AccountController` + `AccountRepository`)
+quedó detrás del middleware `platform`, pero conserva tres defectos: su
+`V1\AccountResource` devuelve el `token` (secreto de 40 caracteres) en todas las
+respuestas, su `total` de paginación ignora los filtros aplicados —así que miente
+al buscar— y su `destroy` recibe el id por body de un `DELETE /accounts` sin id en
+la ruta. No lo consume ningún frontend del monorepo. **Para código nuevo usá el
+de admin.**
+
+Ojo al borrar: `accommodations.account_id` y `users.account_id` no tienen FK (el
+legacy los tiene como `int`, incompatible con el `bigint unsigned` de
+`foreignId()`), así que la base no impide dejar huérfanos. `AccountPolicy::delete()`
+solo autoriza cuentas vacías por eso.
+
 #### Alojamiento
 - `Accommodation` — entidad central del sistema hotelero. Se busca por `slug`. Tiene: `roomTypes`, `images` (polimórfico), `descriptions` (multilenguaje), `services` (M2M vía `AccommodationService`), `policies` (M2M vía `AccommodationPolicy` con pivot `language_id` y `description`), `state`, `city`, `type`, `plan`. **La suscripción es por alojamiento** (`accommodations.plan_id`), no por cuenta — una misma cuenta puede tener propiedades en tiers distintos. Los permisos (entitlements) se consultan con `$accommodation->hasFeature('slug')` / `featureLimit('slug')`. `allow_bookings` deriva de `allowsOnlineBookings()` (= `hasFeature('booking_engine')`); **ya no se usa `plan_id === 1`**.
 - `AccommodationType` — tipo de alojamiento (hotel por estrellas, hostel, etc.). Los tipos 1–5 se agrupan como "hoteles por estrellas" en los filtros.
@@ -65,8 +85,21 @@ Every request flows: `Route → Controller → Repository (via Interface) → Mo
 - `TravelAgency` — agencia de viajes. Entidad independiente (aún sin relaciones definidas en el modelo).
 
 #### Geografía
-- `City` — ciudad buscada por `slug`. Tiene `accommodations` y `images` polimórficas.
+- `City` — ciudad buscada por `slug`. Tiene `accommodations`, `images` polimórficas y `state`.
 - `State` — estado/provincia al que pertenece un `Accommodation`.
+
+**Las dos tablas tienen tamaños contraintuitivos**: `cities` son ~38 filas (solo
+las que se operan), pero `states` son **4119, de ~246 países** — es un catálogo
+mundial del dump legacy, no las provincias argentinas. Argentina son 24
+(`country_id = 10`, resoluble por `iso_code` en `countries`).
+
+Consecuencia para cualquier selector: la provincia hay que **filtrarla por país**
+o la lista es inservible. `Api\Admin\V1\StateController` lo hace vía
+`config('api.catalog_country_iso')`. Las ciudades, en cambio, entran enteras —
+pero `Api\Admin\V1\CityController` igual busca y topea, porque la tabla crece.
+
+Ojo con `cities.state_id`: es legacy `int NOT NULL DEFAULT 0` y sin FK, así que
+"sin provincia" está guardado como `0`, no como `NULL`.
 
 #### Planes y suscripciones (entitlements)
 Modelo de tipo SaaS: **el plan se contrata por alojamiento**, y los permisos se definen como datos (no con `if` por slug en el código).

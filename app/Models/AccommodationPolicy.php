@@ -25,14 +25,14 @@ class AccommodationPolicy extends Model
     ];
 
     protected $casts = [
-        'allow_children'   => 'boolean',
-        'allow_pets'       => 'boolean',
-        'allow_smoking'    => 'boolean',
-        'allow_parties'    => 'boolean',
-        'payment_card'     => 'boolean',
-        'payment_cash'     => 'boolean',
+        'allow_children' => 'boolean',
+        'allow_pets' => 'boolean',
+        'allow_smoking' => 'boolean',
+        'allow_parties' => 'boolean',
+        'payment_card' => 'boolean',
+        'payment_cash' => 'boolean',
         'payment_transfer' => 'boolean',
-        'payment_crypto'   => 'boolean',
+        'payment_crypto' => 'boolean',
     ];
 
     public function accommodation()

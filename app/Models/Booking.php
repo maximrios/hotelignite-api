@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToAccommodation;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 
 class Booking extends Model
 {
-    use HasUuids;
+    use BelongsToAccommodation, HasUuids;
 
     protected $fillable = [
         'accommodation_id',
@@ -24,7 +25,7 @@ class Booking extends Model
     ];
 
     protected $casts = [
-        'checkin'  => 'date',
+        'checkin' => 'date',
         'checkout' => 'date',
     ];
 

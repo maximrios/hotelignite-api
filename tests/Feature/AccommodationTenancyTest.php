@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Accommodation;
 use App\Models\Account;
+use App\Models\City;
 use App\Models\Client;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -22,8 +24,11 @@ class AccommodationTenancyTest extends TestCase
     use DatabaseTransactions;
 
     private Account $accountA;
+
     private Account $accountB;
+
     private Accommodation $accA;
+
     private Accommodation $accB;
 
     protected function setUp(): void
@@ -33,16 +38,33 @@ class AccommodationTenancyTest extends TestCase
         $this->accountA = Account::create(['name' => 'Cuenta A test']);
         $this->accountB = Account::create(['name' => 'Cuenta B test']);
 
+        $cityId = $this->anyCityId();
+
         $this->accA = Accommodation::create([
             'account_id' => $this->accountA->id,
+            'city_id' => $cityId,
             'name' => 'Hotel A test',
             'slug' => 'hotel-a-test-'.uniqid(),
         ]);
         $this->accB = Accommodation::create([
             'account_id' => $this->accountB->id,
+            'city_id' => $cityId,
             'name' => 'Hotel B test',
             'slug' => 'hotel-b-test-'.uniqid(),
         ]);
+    }
+
+    /**
+     * accommodations.city_id es NOT NULL sin default en el schema real, y la
+     * tabla legacy `cities` no tiene timestamps (por eso el insert crudo).
+     */
+    private function anyCityId(): int
+    {
+        return City::query()->value('id')
+            ?? DB::table('cities')->insertGetId([
+                'name' => 'Ciudad test',
+                'slug' => 'ciudad-test-'.uniqid(),
+            ]);
     }
 
     private function accountUser(Account $account): User
@@ -68,11 +90,60 @@ class AccommodationTenancyTest extends TestCase
     }
 
     /** @test */
+    public function account_user_acotado_solo_ve_los_alojamientos_de_su_pivote(): void
+    {
+        // Segundo alojamiento en la MISMA cuenta A, para probar el narrowing
+        // dentro de la cuenta (no entre cuentas).
+        $accA2 = Accommodation::create([
+            'account_id' => $this->accountA->id,
+            'city_id' => $this->anyCityId(),
+            'name' => 'Hotel A2 test',
+            'slug' => 'hotel-a2-test-'.uniqid(),
+        ]);
+
+        $user = $this->accountUser($this->accountA);
+        $user->accommodations()->sync([$this->accA->id]);
+
+        Sanctum::actingAs($user);
+
+        $ids = collect($this->getJson('/api/admin/v1/accommodations')->json('data'))->pluck('id');
+
+        $this->assertTrue($ids->contains($this->accA->id), 'Ve el alojamiento al que está acotado');
+        $this->assertFalse($ids->contains($accA2->id), 'No ve el otro de su cuenta: está acotado');
+        $this->assertFalse($ids->contains($this->accB->id), 'Nunca ve el de otra cuenta');
+    }
+
+    /** @test */
     public function account_user_no_puede_ver_accommodation_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
 
         $this->getJson("/api/admin/v1/accommodations/{$this->accB->id}")->assertForbidden();
+    }
+
+    /** @test */
+    public function account_user_acotado_no_puede_ver_ni_editar_otro_de_su_cuenta(): void
+    {
+        // Sin este corte el acotamiento sería solo cosmético: se ocultaría en el
+        // listado pero seguiría accesible por id. Es control de acceso, no un filtro.
+        $accA2 = Accommodation::create([
+            'account_id' => $this->accountA->id,
+            'city_id' => $this->anyCityId(),
+            'name' => 'Hotel A2 test',
+            'slug' => 'hotel-a2-test-'.uniqid(),
+        ]);
+
+        $user = $this->accountUser($this->accountA);
+        $user->accommodations()->sync([$this->accA->id]);
+
+        Sanctum::actingAs($user);
+
+        $this->getJson("/api/admin/v1/accommodations/{$accA2->id}")->assertForbidden();
+        $this->patchJson("/api/admin/v1/accommodations/{$accA2->id}", ['name' => 'Nope'])
+            ->assertForbidden();
+
+        // El que sí tiene acotado sigue accesible.
+        $this->getJson("/api/admin/v1/accommodations/{$this->accA->id}")->assertOk();
     }
 
     /** @test */
@@ -130,6 +201,7 @@ class AccommodationTenancyTest extends TestCase
 
         $res = $this->postJson('/api/admin/v1/accommodations', [
             'name' => 'Nuevo hotel',
+            'city_id' => $this->anyCityId(),
             'account_id' => $this->accountB->id, // intento de crear en otra cuenta
         ])->assertSuccessful();
 

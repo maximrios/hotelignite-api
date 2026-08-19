@@ -15,8 +15,8 @@ class AccommodationRatePolicy extends Model
     ];
 
     protected $casts = [
-        'cancel_penalty'   => 'float',
-        'no_show_penalty'  => 'float',
+        'cancel_penalty' => 'float',
+        'no_show_penalty' => 'float',
     ];
 
     public function accommodation()

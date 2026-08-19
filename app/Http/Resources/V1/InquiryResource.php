@@ -9,18 +9,19 @@ class InquiryResource extends JsonResource
     public function toArray($request)
     {
         return [
-            'id'               => $this->id,
+            'id' => $this->id,
             'accommodation_id' => $this->accommodation_id,
-            'name'             => $this->name,
-            'lastname'         => $this->lastname,
-            'email'            => $this->email,
-            'phone'            => $this->phone,
-            'adults'           => $this->adults,
-            'childrens'        => $this->childrens,
-            'checkin'          => $this->checkin,
-            'checkout'         => $this->checkout,
-            'message'          => $this->message,
-            'created_at'       => $this->created_at,
+            'name' => $this->name,
+            'lastname' => $this->lastname,
+            'email' => $this->email,
+            'phone' => $this->phone,
+            'adults' => $this->adults,
+            'childrens' => $this->childrens,
+            'checkin' => $this->checkin,
+            'checkout' => $this->checkout,
+            'message' => $this->message,
+            'status' => $this->status ?? 'new',
+            'created_at' => $this->created_at,
         ];
     }
 }

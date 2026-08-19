@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             PlanSeeder::class,
             FeatureSeeder::class,
             PlanFeatureSeeder::class,
+            DocumentTypeSeeder::class,
+            ClientDocumentRequirementSeeder::class,
         ]);
     }
 }

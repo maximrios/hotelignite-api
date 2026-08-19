@@ -5,6 +5,10 @@ info:
     API REST del PMS HotelIgnite. Todos los endpoints bajo `/api/v1/` requieren autenticación
     Bearer (Laravel Sanctum) excepto donde se indique lo contrario.
 
+    > **Este documento cubre solo `/api/v1`.** La superficie `/api/admin/v1` —
+    > la que consumen el PMS, el CRM y el portal de clients, y la única con
+    > `PATCH` de alojamiento — está en **`docs/openapi-admin.yaml`**.
+
     **Convenciones:**
     - `DELETE` recibe el ID en el body (no en la URL), salvo `Channels` que usa `DELETE /channels/{id}` (apiResource estándar de Laravel).
     - `GET index` devuelve colección paginada con `data` + `meta`.
@@ -21,6 +25,7 @@ info:
     - `services.yaml` — Servicios y amenities
     - `accommodation-policies.yaml` — Políticas, traducciones y tarifas de cancelación
     - `bookings.yaml` — Pre-reservas y reservas confirmadas
+    - `inquiries.yaml` — Consultas (leads) del motor web
   version: "1.0.0"
 
 servers:
@@ -65,6 +70,8 @@ tags:
     description: Pre-reservas iniciadas por el huésped (flujo de dos pasos)
   - name: Reservations
     description: Reservas confirmadas con huésped, canal y estado
+  - name: Inquiries
+    description: Consultas (leads) enviadas desde el motor web del alojamiento
 
 # ===========================================================================
 # PATHS — cada sección es un $ref al archivo de dominio correspondiente
@@ -188,6 +195,10 @@ paths:
   /reservations:
     $ref: './openapi/bookings.yaml#/reservations'
 
+  # Inquiries
+  /inquiries:
+    $ref: './openapi/inquiries.yaml#/collection'
+
 # ===========================================================================
 # COMPONENTS — todos los schemas centralizados aquí
 # ===========================================================================
@@ -218,6 +229,20 @@ components:
       name: offset
       in: query
       schema: { type: integer, default: 0 }
+
+    PerPageParam:
+      name: per_page
+      in: query
+      description: |
+        Registros por página en los endpoints que usan `paginate()`
+        (Reservations, Inquiries). **Sin tope**: el valor se toma tal cual.
+      schema: { type: integer, default: 25 }
+
+    PageParam:
+      name: page
+      in: query
+      description: Número de página (estándar de `paginate()` de Laravel)
+      schema: { type: integer, default: 1 }
 
   responses:
     ValidationError:
@@ -881,11 +906,20 @@ components:
     # -----------------------------------------------------------------------
     ServiceResource:
       type: object
+      description: |
+        **No expone `slug`**: la tabla `services` no tiene esa columna (venía
+        siempre en `null`).
       properties:
         id:   { type: integer, example: 1 }
         name: { type: string, example: "WiFi" }
-        slug: { type: string, example: "wifi" }
-        icon: { type: string, nullable: true, example: "wifi-icon" }
+        icon:
+          type: string
+          nullable: true
+          example: "<i class=\"fa fa-wifi\"></i>"
+          description: |
+            Alias de la columna legacy `ico`, que guarda **HTML crudo de Font
+            Awesome**, no un nombre de ícono. Se reporta `null` cuando está vacía
+            o cuando conserva el `'0'` que trae por default.
         type:
           type: string
           enum: [general, room, bathroom, accessibility, kitchen]
@@ -902,28 +936,34 @@ components:
 
     StoreServiceRequest:
       type: object
-      required: [name]
+      required: [name, type]
       properties:
-        name:           { type: string, minLength: 3, example: "WiFi" }
-        slug:           { type: string, example: "wifi" }
-        icon:           { type: string, nullable: true }
+        name:
+          type: string
+          minLength: 3
+          maxLength: 255
+          example: "WiFi"
+          description: |
+            **Único en la tabla.** La collation de MySQL es case-insensitive, así
+            que "WiFi" choca con "Wifi".
         type:
           type: string
           enum: [general, room, bathroom, accessibility, kitchen]
-          default: general
+          example: general
+        icon:           { type: string, nullable: true, maxLength: 255, description: "HTML del ícono; `null` se guarda como cadena vacía" }
         is_highlighted: { type: boolean, default: false }
-        enabled:        { type: boolean, default: true }
+        enabled:        { type: boolean, default: false }
 
     UpdateServiceRequest:
       type: object
+      description: Todos los campos son opcionales; el `unique` de `name` ignora la fila que se edita.
       properties:
-        name:           { type: string, minLength: 3 }
-        slug:           { type: string }
-        icon:           { type: string, nullable: true }
+        name:           { type: string, minLength: 3, maxLength: 255 }
         type:
           type: string
           enum: [general, room, bathroom, accessibility, kitchen]
-        is_highlighted: { type: boolean, nullable: true }
+        icon:           { type: string, nullable: true, maxLength: 255 }
+        is_highlighted: { type: boolean }
         enabled:        { type: boolean }
 
     # -----------------------------------------------------------------------
@@ -1160,34 +1200,148 @@ components:
     # -----------------------------------------------------------------------
     ReservationResource:
       type: object
+      description: |
+        Contrato de lectura plano, pensado para la grilla del PMS: campos
+        primitivos ya normalizados que el frontend sólo formatea. No expone el
+        alojamiento embebido ni el desglose de pax — para eso está el detalle.
+      properties:
+        id:
+          type: string
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+          description: |
+            UUID en las reservas nuevas. Las filas legacy del dump conservan su
+            id numérico convertido a string (`"1"`, `"2"`, …).
+        code:
+          type: string
+          example: "HI-2026-00412"
+          description: "`confirmation_number` → `source_reference` → `id` (el primero no nulo)"
+        guest:
+          type: string
+          nullable: true
+          example: "Juan Pérez"
+          description: "`full_name` del huésped (nombre + apellido), no el objeto"
+        room:
+          type: string
+          nullable: true
+          example: "101"
+          description: Número de la habitación asignada
+        checkin:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-08-01"
+          description: "`checkin_date`, o `arrival` en filas legacy"
+        checkout:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-08-05"
+          description: "`checkout_date`, o `departure` en filas legacy"
+        nights:
+          type: integer
+          example: 4
+          description: Noches entre checkin y checkout. `0` si falta alguna de las dos fechas.
+        status:
+          type: string
+          enum: [cancelled, out, departing, arriving, in]
+          example: in
+          description: |
+            **Derivado de las fechas y de `cancelled_at`, no de la tabla `status`.**
+            Prioridad: `cancelled` (hay `cancelled_at`) > `out` (checkout anterior
+            a hoy) > `departing` (checkout es hoy) > `arriving` (checkin hoy o
+            posterior) > `in` (in-house). En un turnover del mismo día gana
+            `departing`. Si falta alguna fecha, devuelve `arriving`.
+        amount:
+          type: number
+          format: float
+          nullable: true
+          example: 150.00
+          description: |
+            Importe total **en unidades de moneda, no en centavos** (a diferencia
+            de `rates.price`). Sale de `total_amount / 100` en registros nuevos o
+            de `rate_total` en los legacy; `null` si no hay ninguno.
+        currency:
+          type: string
+          example: "ARS"
+          description: Default `ARS` cuando la reserva no la tiene cargada
+        channel:
+          type: string
+          nullable: true
+          example: "Booking.com"
+          description: Nombre del canal; si no hay relación, cae al `channel_code` del registro
+
+    ReservationCollection:
+      type: object
+      description: |
+        Sólo `data` — este endpoint **no devuelve `meta`** aunque la consulta
+        pagine. Ver la nota de paginación en `GET /reservations`.
+      properties:
+        data: { type: array, items: { $ref: '#/components/schemas/ReservationResource' } }
+
+    # -----------------------------------------------------------------------
+    # INQUIRY (consulta / lead del motor web)
+    # -----------------------------------------------------------------------
+    InquiryResource:
+      type: object
       properties:
         id:
           type: string
           format: uuid
-          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
-        accommodation:
-          $ref: '#/components/schemas/AccommodationEmbedded'
-        guest:
-          type: object
+          example: "9c1f0b2e-4d3a-4f5b-9c8d-7e6f5a4b3c2d"
+        accommodation_id:
+          type: string
           nullable: true
-          properties:
-            id:        { type: integer }
-            identity:  { type: string, nullable: true, example: "DNI 12345678" }
-            full_name: { type: string, example: "Juan Pérez" }
-            email:     { type: string, format: email, nullable: true }
-            phone:     { type: string, nullable: true }
-        channel:  { type: string, nullable: true, example: "Booking.com" }
-        status:   { type: string, nullable: true, example: "confirmed" }
-        arrival:  { type: string, format: date, example: "2026-08-01" }
-        departure: { type: string, format: date, example: "2026-08-05" }
-        pax:      { type: integer, example: 3, description: "adults + children" }
-        adults:   { type: integer, example: 2 }
-        childrens: { type: integer, example: 1 }
+          example: "1"
+          description: |
+            La columna es `char(36)` (uuid) mientras que `accommodations.id` es
+            entero, así que el valor viaja como **string numérico**.
+        name:       { type: string, example: "Juan" }
+        lastname:   { type: string, example: "Pérez" }
+        email:      { type: string, format: email, example: "juan@example.com" }
+        phone:      { type: string, example: "+5491112345678" }
+        adults:     { type: integer, example: 2 }
+        childrens:  { type: integer, example: 1 }
+        checkin:    { type: string, format: date, example: "2026-08-01", description: "Persistido en `Y-m-d` (entra en `d/m/Y`)" }
+        checkout:   { type: string, format: date, nullable: true, example: "2026-08-05" }
+        message:    { type: string, nullable: true, example: "¿Tienen cochera?" }
+        status:
+          type: string
+          enum: [new, answered]
+          example: new
+          description: Default `new`. Las filas anteriores a la columna se reportan igual como `new`.
+        created_at: { type: string, format: date-time, nullable: true, example: "2026-07-20T18:42:03.000000Z" }
 
-    ReservationCollection:
+    InquiryCollection:
+      type: array
+      description: |
+        **Array JSON plano, sin envoltorio `data` y sin `meta`** — a diferencia
+        del resto de los índices de la API. La consulta pagina igual (25 por
+        página por defecto).
+      items: { $ref: '#/components/schemas/InquiryResource' }
+
+    StoreInquiryRequest:
       type: object
+      required: [name, lastname, email, phone, adults, childrens, checkin]
       properties:
-        data: { type: array, items: { $ref: '#/components/schemas/ReservationResource' } }
+        accommodation_id: { type: integer, nullable: true, example: 1 }
+        name:             { type: string, minLength: 3, example: "Juan" }
+        lastname:         { type: string, minLength: 2, example: "Pérez" }
+        email:            { type: string, format: email, example: "juan@example.com" }
+        phone:            { type: string, example: "+5491112345678" }
+        adults:           { type: integer, minimum: 1, example: 2 }
+        childrens:        { type: integer, minimum: 0, example: 1 }
+        checkin:
+          type: string
+          pattern: '^\d{2}/\d{2}/\d{4}$'
+          example: "01/08/2026"
+          description: "**Formato `d/m/Y`**, no ISO — se parsea con `Carbon::createFromFormat`."
+        checkout:
+          type: string
+          nullable: true
+          pattern: '^\d{2}/\d{2}/\d{4}$'
+          example: "05/08/2026"
+          description: "Mismo formato `d/m/Y`."
+        message:          { type: string, nullable: true, example: "¿Tienen cochera?" }
 
     # -----------------------------------------------------------------------
     # Shared embedded

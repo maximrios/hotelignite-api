@@ -19,10 +19,19 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Idempotente por columna: la DB legacy (restaurada de dumps) puede ya
+        // tener alguna de estas columnas (ej. `account_id`). Se agrega sólo lo
+        // que falte para evitar "Duplicate column" al re-aplicar sobre el dump.
         Schema::table('users', function (Blueprint $table) {
-            $table->string('user_type', 20)->default('account')->after('email');
-            $table->unsignedBigInteger('account_id')->nullable()->after('user_type')->index();
-            $table->unsignedBigInteger('client_id')->nullable()->after('account_id')->index();
+            if (! Schema::hasColumn('users', 'user_type')) {
+                $table->string('user_type', 20)->default('account')->after('email');
+            }
+            if (! Schema::hasColumn('users', 'account_id')) {
+                $table->unsignedBigInteger('account_id')->nullable()->after('user_type')->index();
+            }
+            if (! Schema::hasColumn('users', 'client_id')) {
+                $table->unsignedBigInteger('client_id')->nullable()->after('account_id')->index();
+            }
         });
     }
 

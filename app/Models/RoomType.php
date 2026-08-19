@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToAccommodation;
 use Illuminate\Database\Eloquent\Model;
 
 class RoomType extends Model
 {
+    use BelongsToAccommodation;
+
     protected $fillable = [
         'size',
         'max_occupancy',

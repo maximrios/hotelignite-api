@@ -44,6 +44,17 @@ return [
             'throw' => false,
         ],
 
+        // Legajo de prestadores: bucket PRIVADO. Los documentos (habilitación,
+        // seguro, fiscal) no son imágenes públicas — se sirven por un endpoint que
+        // valida el share, nunca por URL directa. Ver docs/documents-plan.md §7.
+        // En prod, apuntar a S3 privado vía DOCUMENTS_DISK.
+        'documents' => [
+            'driver' => env('DOCUMENTS_DRIVER', 'local'),
+            'root' => storage_path('app/documents'),
+            'visibility' => 'private',
+            'throw' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

@@ -13,9 +13,9 @@ use Illuminate\Routing\Controller as BaseController;
 class BookingController extends BaseController
 {
 
-    public function index()
+    public function index(Request $request)
     {
-        $reservations = Booking::all();
-        return response()->json($reservations, 200);
+        $bookings = Booking::visibleTo($request->user())->get();
+        return response()->json($bookings, 200);
     }
 }

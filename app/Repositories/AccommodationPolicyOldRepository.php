@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace App\Repositories;
 
-use Illuminate\Http\Request;
+use App\Http\Requests\DestroyAccommodationPolicyOldRequest;
+use App\Http\Requests\StoreAccommodationPolicyOldRequest;
+use App\Http\Requests\UpdateAccommodationPolicyOldRequest;
+use App\Http\Resources\V1\AccommodationPolicyOldResource;
+use App\Http\Resources\V1\AccommodationPolicyOldResourceCollection;
 use App\Models\Accommodation;
 use App\Models\AccommodationPolicyOld;
-use App\Http\Requests\StoreAccommodationPolicyOldRequest;
-use App\Http\Resources\V1\AccommodationPolicyOldResource;
-use App\Http\Requests\DestroyAccommodationPolicyOldRequest;
-use App\Http\Requests\UpdateAccommodationPolicyOldRequest;
 use App\Repositories\Contracts\AccommodationPolicyOldInterface;
-use App\Http\Resources\V1\AccommodationPolicyOldResourceCollection;
+use Illuminate\Http\Request;
 
 class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterface
 {
@@ -22,17 +22,17 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
         $offset = ($request->offset) ? $request->offset : 0;
 
         $accommodationPolicies = AccommodationPolicyOld::when($request->accommodation_id, function ($q, $accommodation_id) {
-                                return $q->where('accommodation_id', $accommodation_id);
-                            })
-                            ->when($request->policy_id, function ($q, $policy_id) {
-                                return $q->where('policy_id', $policy_id);
-                            })
-                            ->when($request->language_id, function ($q, $language_id) {
-                                return $q->where('language_id', $language_id);
-                            })
-                            ->offset($offset)
-                            ->limit($limit)
-                            ->get();
+            return $q->where('accommodation_id', $accommodation_id);
+        })
+            ->when($request->policy_id, function ($q, $policy_id) {
+                return $q->where('policy_id', $policy_id);
+            })
+            ->when($request->language_id, function ($q, $language_id) {
+                return $q->where('language_id', $language_id);
+            })
+            ->offset($offset)
+            ->limit($limit)
+            ->get();
 
         return new AccommodationPolicyOldResourceCollection($accommodationPolicies);
     }
@@ -40,6 +40,7 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
     public function find($id)
     {
         $accommodationPolicy = AccommodationPolicyOld::find($id);
+
         return new AccommodationPolicyOldResource($accommodationPolicy);
     }
 
@@ -49,17 +50,17 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
         $offset = ($request->offset) ? $request->offset : 0;
 
         $accommodationPolicies = AccommodationPolicyOld::when($request->accommodation_id, function ($q, $accommodation_id) {
-                                return $q->where('accommodation_id', $accommodation_id);
-                            })
-                            ->when($request->policy_id, function ($q, $policy_id) {
-                                return $q->where('policy_id', $policy_id);
-                            })
-                            ->when($request->language_id, function ($q, $language_id) {
-                                return $q->where('language_id', $language_id);
-                            })
-                            ->offset($offset)
-                            ->limit($limit)
-                            ->paginate();
+            return $q->where('accommodation_id', $accommodation_id);
+        })
+            ->when($request->policy_id, function ($q, $policy_id) {
+                return $q->where('policy_id', $policy_id);
+            })
+            ->when($request->language_id, function ($q, $language_id) {
+                return $q->where('language_id', $language_id);
+            })
+            ->offset($offset)
+            ->limit($limit)
+            ->paginate();
 
         return new AccommodationPolicyOldResourceCollection($accommodationPolicies);
     }
@@ -68,7 +69,7 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
     {
         $accommodation = Accommodation::find($id);
 
-        if (!$accommodation) {
+        if (! $accommodation) {
             throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Accommodation not found');
         }
 
@@ -100,7 +101,7 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
     {
         $accommodation = Accommodation::find($request->accommodation_id);
 
-        if (!$accommodation) {
+        if (! $accommodation) {
             throw new \Illuminate\Database\Eloquent\ModelNotFoundException('Accommodation not found');
         }
 
@@ -111,7 +112,7 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
                 ->where('language_id', $policyData['language_id'])
                 ->first();
 
-            if (!$existingPolicy) {
+            if (! $existingPolicy) {
                 $newPolicy = AccommodationPolicyOld::create([
                     'accommodation_id' => $request->accommodation_id,
                     'policy_id' => $policyData['policy_id'],
@@ -132,6 +133,7 @@ class AccommodationPolicyOldRepository implements AccommodationPolicyOldInterfac
     {
         $accommodationPolicy = AccommodationPolicyOld::find($request->accommodation_policy_id);
         $accommodationPolicy->delete();
+
         return new AccommodationPolicyOldResource($accommodationPolicy);
     }
 }

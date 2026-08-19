@@ -107,27 +107,31 @@ reservations:
     tags: [Reservations]
     summary: Listar reservas confirmadas
     description: |
-      Devuelve reservas confirmadas paginadas, ordenadas por id descendente.
-      A diferencia de las pre-reservas (`/booking`), las reservas son registros
-      completos con huésped, canal, estado y datos financieros.
+      Reservas confirmadas, **scopeadas por tenencia** (`Reservation::visibleTo()`):
+      un usuario `platform` ve todas; el resto sólo las de sus alojamientos.
+      A diferencia de las pre-reservas (`/booking`), son registros completos con
+      huésped, habitación, canal e importe.
+
+      **Orden:** por fecha de estancia descendente —
+      `COALESCE(checkin_date, arrival) DESC`—, no por id: el id es UUID y dejó de
+      ser secuencial.
+
+      **Paginación:** la consulta pagina (25 por página por defecto), pero la
+      respuesta sólo trae `data` — no incluye `meta`. Para saber si hay más
+      páginas hay que mirar si llegaron exactamente `per_page` elementos.
+
+      **Filas legacy vs. nuevas:** el Resource normaliza las dos formas que
+      conviven en la tabla — las del dump legacy (`arrival`/`departure` +
+      `rate_total` decimal) y las del PMS (`checkin_date`/`checkout_date` +
+      `total_amount` en centavos). El consumidor recibe siempre el mismo
+      contrato.
     parameters:
-      - $ref: '#/components/parameters/LimitParam'
-      - $ref: '#/components/parameters/OffsetParam'
       - name: accommodation_id
         in: query
+        description: Filtra por alojamiento. Sin él, devuelve todos los visibles.
         schema: { type: integer }
-      - name: channel_id
-        in: query
-        schema: { type: integer }
-      - name: status_id
-        in: query
-        schema: { type: integer }
-      - name: checkin_from
-        in: query
-        schema: { type: string, format: date, example: '2026-07-01' }
-      - name: checkin_to
-        in: query
-        schema: { type: string, format: date, example: '2026-07-31' }
+      - $ref: '#/components/parameters/PerPageParam'
+      - $ref: '#/components/parameters/PageParam'
     responses:
       '200':
         description: OK
@@ -135,3 +139,5 @@ reservations:
           application/json:
             schema:
               $ref: '#/components/schemas/ReservationCollection'
+      '401':
+        description: No autenticado

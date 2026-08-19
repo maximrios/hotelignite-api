@@ -1,0 +1,388 @@
+openapi: 3.0.3
+info:
+  title: HotelIgnite Admin API
+  description: |
+    Superficie **`/api/admin/v1`** — la que consumen el PMS, el CRM y el portal
+    de clients. Es distinta de `/api/v1` (documentada en `docs/openapi.yaml`),
+    que es la API legacy/pública del motor de reservas.
+
+    ## Autenticación y tenencia
+
+    Bearer token de Laravel Sanctum. Todo el grupo pasa por
+    `['auth:sanctum', 'throttle:api', 'client.readonly']`.
+
+    Los **mismos endpoints devuelven distinta data según quién llame** — la
+    tenencia sale del token, nunca de un filtro del frontend:
+
+    | `user_type` | Alcance |
+    |---|---|
+    | `platform` | Todo (`AccommodationPolicy::before()` hace bypass) |
+    | `account`  | Los alojamientos de su `account_id`, acotados por el pivote `accommodation_user` si lo tiene |
+    | `client`   | **Solo lectura** de los alojamientos del pivote `accommodation_client`; `client.readonly` responde 403 a cualquier escritura |
+
+    ## Estado de este documento
+
+    Cubre el CRUD de **Accommodations**. El resto de `/api/admin/v1`
+    (`services`, `cities`, `states`, `plans`, `accommodation-types`,
+    `accommodations/{id}/services`, `.../images`, `.../documents`, `clients`,
+    `accounts`, `users`) todavía no está documentado acá.
+  version: "1.0.0"
+
+servers:
+  - url: /api/admin/v1
+    description: Admin API v1
+
+security:
+  - sanctum: []
+
+tags:
+  - name: Accommodations
+    description: Alojamientos — ficha del establecimiento
+
+paths:
+  /accommodations:
+    $ref: './openapi/admin-accommodations.yaml#/collection'
+  /accommodations/{id}:
+    $ref: './openapi/admin-accommodations.yaml#/item'
+
+components:
+  securitySchemes:
+    sanctum:
+      type: http
+      scheme: bearer
+      description: 'Token personal de Sanctum (`Authorization: Bearer <token>`).'
+
+  responses:
+    Forbidden:
+      description: |
+        Sin permiso. Lo devuelven `AccommodationPolicy` (el alojamiento no es de
+        tu cuenta / fuera de tu alcance) y el middleware `client.readonly` (un
+        usuario `client` intentando escribir).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: El alojamiento no existe.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationError:
+      description: Error de validación.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        message: { type: string, example: "This action is unauthorized." }
+
+    ValidationError:
+      type: object
+      properties:
+        message: { type: string, example: "The given data was invalid." }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          example:
+            email: ["The email must be a valid email address."]
+
+    PaginationMeta:
+      type: object
+      description: Bloque `meta` que inyecta el paginador de Laravel.
+      properties:
+        current_page: { type: integer, example: 1 }
+        from:         { type: integer, nullable: true, example: 1 }
+        last_page:    { type: integer, example: 6 }
+        path:         { type: string, example: "https://api.hotelignite.com/api/admin/v1/accommodations" }
+        per_page:     { type: integer, example: 15 }
+        to:           { type: integer, nullable: true, example: 15 }
+        total:        { type: integer, example: 76 }
+
+    PaginationLinks:
+      type: object
+      properties:
+        first: { type: string, nullable: true }
+        last:  { type: string, nullable: true }
+        prev:  { type: string, nullable: true }
+        next:  { type: string, nullable: true }
+
+    AccommodationResource:
+      type: object
+      description: |
+        Salida de `App\Http\Resources\Admin\AccommodationResource`.
+        `city`, `state`, `type`, `images`, `room_types` y `services` son
+        `whenLoaded`: **solo aparecen si el endpoint cargó la relación**.
+        `index`, `show`, `update` y `partialUpdate` cargan `city`, `state` y
+        `type`; `store` **no** carga ninguna.
+      properties:
+        id:                 { type: integer, example: 1 }
+        account_id:         { type: integer, nullable: true, example: 3 }
+        plan_id:            { type: integer, nullable: true, example: 2 }
+        slug:               { type: string, example: "hotel-ignite-bariloche" }
+        name:               { type: string, example: "Hotel Ignite Bariloche" }
+        legal_name:         { type: string, nullable: true, example: "Ignite Hotelería S.A." }
+        stars:              { type: integer, nullable: true, minimum: 1, maximum: 5, example: 4 }
+        logo:               { type: string, nullable: true }
+        email:              { type: string, nullable: true, example: "info@ignite.com" }
+        phone:              { type: string, nullable: true }
+        email_reservations: { type: string, nullable: true }
+        phone_reservations: { type: string, nullable: true }
+        web:                { type: string, nullable: true }
+        address:            { type: string, nullable: true, example: "Av. Bustillo 1234" }
+        address2:           { type: string, nullable: true, example: "Piso 2, Depto B" }
+        landmark:           { type: string, nullable: true, example: "Frente al Centro Cívico" }
+        postal_code:        { type: string, nullable: true, example: "8400" }
+        city_id:            { type: integer, nullable: true, example: 5 }
+        city:
+          type: string
+          nullable: true
+          description: Nombre de la ciudad. Solo si se cargó la relación.
+          example: "San Carlos de Bariloche"
+        state_id:
+          type: integer
+          nullable: true
+          description: |
+            **Ojo:** la columna legacy es `int NOT NULL DEFAULT 0` y sin FK, así
+            que "sin provincia" viaja como `0`, no como `null`.
+          example: 18
+        state:
+          type: string
+          nullable: true
+          description: Nombre de la provincia. Solo si se cargó la relación.
+        type_id:
+          type: integer
+          nullable: true
+          description: FK a `accommodation_types`. También `NOT NULL DEFAULT 0` → "sin tipo" es `0`.
+          example: 4
+        type:
+          type: string
+          nullable: true
+          description: Nombre del tipo. Solo si se cargó la relación.
+          example: "Hotel 4 estrellas"
+        latitude:
+          type: string
+          nullable: true
+          description: Guardado como `varchar` en la BD legacy — sale string aunque entre numérico.
+          example: "-41.133472"
+        longitude:
+          type: string
+          nullable: true
+          example: "-71.310028"
+        file_number:        { type: string, nullable: true }
+        tax_identification: { type: string, nullable: true, example: "30-12345678-9" }
+        channel_code:       { type: string, nullable: true }
+        currency_id:        { type: string, nullable: true, example: "ARS" }
+        language_id:
+          type: string
+          nullable: true
+          description: 'Columna legacy `char(4) NOT NULL DEFAULT ''0''` — puede venir literalmente `"0"` en filas viejas.'
+          example: "es"
+        timezone:           { type: string, nullable: true, example: "America/Argentina/Bariloche" }
+        bank_data:          { type: string, nullable: true }
+        comment:            { type: string, nullable: true }
+        enabled:
+          type: boolean
+          description: Publicado. El catálogo B2B solo lista los que están en `true`.
+          example: true
+        active:     { type: boolean, nullable: true }
+        test:       { type: boolean, nullable: true }
+        expiration: { type: string, format: date, nullable: true }
+        images:     { type: array, nullable: true, items: { type: object } }
+        room_types: { type: array, nullable: true, items: { type: object } }
+        services:   { type: array, nullable: true, items: { type: object } }
+
+    AccommodationCollection:
+      type: object
+      properties:
+        data:  { type: array, items: { $ref: '#/components/schemas/AccommodationResource' } }
+        links: { $ref: '#/components/schemas/PaginationLinks' }
+        meta:  { $ref: '#/components/schemas/PaginationMeta' }
+
+    StoreAccommodationRequest:
+      type: object
+      description: '`App\Http\Requests\StoreAccommodationRequest`.'
+      required: [name]
+      properties:
+        name:               { type: string, minLength: 3, maxLength: 255, example: "Hotel Ignite Bariloche" }
+        legal_name:         { type: string, nullable: true, maxLength: 255 }
+        account_id:
+          type: integer
+          nullable: true
+          description: Debe existir en `accounts`. **Solo lo respeta `platform`**; a un `account` se le fuerza el suyo.
+        plan_id:            { type: integer, nullable: true, description: Debe existir en `plans`. }
+        type_id:            { type: integer, nullable: true }
+        stars:              { type: integer, nullable: true, minimum: 1, maximum: 5 }
+        email:              { type: string, format: email, nullable: true }
+        phone:              { type: string, nullable: true, maxLength: 50 }
+        email_reservations: { type: string, format: email, nullable: true }
+        phone_reservations: { type: string, nullable: true, maxLength: 50 }
+        web:                { type: string, format: uri, nullable: true }
+        address:            { type: string, nullable: true, maxLength: 255 }
+        address2:           { type: string, nullable: true, maxLength: 255 }
+        landmark:           { type: string, nullable: true, maxLength: 255 }
+        postal_code:        { type: string, nullable: true, maxLength: 20 }
+        city_id:            { type: integer, nullable: true }
+        state_id:           { type: integer, nullable: true }
+        country_id:         { type: string, nullable: true, maxLength: 10 }
+        currency_id:        { type: string, nullable: true, maxLength: 4 }
+        language_id:        { type: string, nullable: true, maxLength: 4 }
+        timezone:           { type: string, nullable: true, example: "America/Argentina/Bariloche" }
+        latitude:           { type: number, nullable: true, minimum: -90, maximum: 90 }
+        longitude:          { type: number, nullable: true, minimum: -180, maximum: 180 }
+        enabled:            { type: boolean, nullable: true }
+
+    UpdateAccommodationRequest:
+      type: object
+      description: |
+        `App\Http\Requests\UpdateAccommodationRequest` — el que usa el `PUT`.
+
+        Mismo set de campos que el `PATCH`, pero **sin semántica parcial**: las
+        reglas no son `sometimes`, así que una clave ausente se valida igual y
+        el `update()` recibe solo lo que mandaste. Para edición parcial desde el
+        PMS, usar `PATCH`.
+      properties:
+        name:               { type: string, minLength: 3, maxLength: 255 }
+        legal_name:         { type: string, nullable: true, maxLength: 255 }
+        account_id:         { type: integer, nullable: true }
+        plan_id:            { type: integer, nullable: true }
+        type_id:            { type: integer, nullable: true }
+        stars:              { type: integer, nullable: true, minimum: 1, maximum: 5 }
+        email:              { type: string, format: email, nullable: true }
+        phone:              { type: string, nullable: true, maxLength: 50 }
+        email_reservations: { type: string, format: email, nullable: true }
+        phone_reservations: { type: string, nullable: true, maxLength: 50 }
+        web:                { type: string, format: uri, nullable: true }
+        address:            { type: string, nullable: true, maxLength: 255 }
+        address2:           { type: string, nullable: true, maxLength: 255 }
+        landmark:           { type: string, nullable: true, maxLength: 255 }
+        postal_code:        { type: string, nullable: true, maxLength: 20 }
+        city_id:            { type: integer, nullable: true }
+        state_id:           { type: integer, nullable: true }
+        country_id:         { type: string, nullable: true, maxLength: 10 }
+        currency_id:        { type: string, nullable: true, maxLength: 4 }
+        language_id:        { type: string, nullable: true, maxLength: 4 }
+        timezone:           { type: string, nullable: true }
+        latitude:           { type: number, nullable: true, minimum: -90, maximum: 90 }
+        longitude:          { type: number, nullable: true, minimum: -180, maximum: 180 }
+        file_number:        { type: string, nullable: true, maxLength: 50 }
+        tax_identification: { type: string, nullable: true, maxLength: 50 }
+        channel_code:       { type: string, nullable: true, maxLength: 50 }
+        bank_data:          { type: string, nullable: true }
+        comment:            { type: string, nullable: true }
+        enabled:            { type: boolean, nullable: true }
+        active:             { type: boolean, nullable: true }
+        test:               { type: boolean, nullable: true }
+        expiration:         { type: string, format: date, nullable: true }
+
+    PatchAccommodationRequest:
+      type: object
+      description: |
+        `App\Http\Requests\Admin\PatchAccommodationRequest` — **lista completa y
+        exhaustiva** de lo que acepta `PATCH /accommodations/{id}`.
+
+        Toda regla es `sometimes`: mandá solo las claves que querés cambiar.
+        Cualquier clave fuera de esta lista se descarta sin error (ver la tabla
+        en la descripción del endpoint).
+      additionalProperties: false
+      properties:
+        name:               { type: string, minLength: 3, maxLength: 255, example: "Hotel Ignite Bariloche" }
+        legal_name:         { type: string, nullable: true, maxLength: 255, example: "Ignite Hotelería S.A." }
+        account_id:
+          type: integer
+          nullable: true
+          description: Debe existir en `accounts`. Se ignora salvo que el llamador sea `platform` — impide reasignar de cuenta.
+        plan_id:
+          type: integer
+          nullable: true
+          description: Debe existir en `plans`. La suscripción es **por alojamiento**, no por cuenta.
+        type_id:
+          type: integer
+          nullable: true
+          description: 'FK a `accommodation_types`. Columna `NOT NULL DEFAULT 0`: "sin tipo" se guarda como `0`, no `null`.'
+          example: 4
+        stars:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 5
+          description: |
+            Categoría en estrellas. Independiente de `type_id`: los tipos 1–5
+            siguen siendo "hotel por estrellas" para agrupar en filtros, pero un
+            apart u hostel también puede estar categorizado.
+          example: 4
+        email:              { type: string, format: email, nullable: true }
+        phone:              { type: string, nullable: true, maxLength: 50 }
+        email_reservations: { type: string, format: email, nullable: true }
+        phone_reservations: { type: string, nullable: true, maxLength: 50 }
+        web:
+          type: string
+          format: uri
+          nullable: true
+          description: Validado con `url` — necesita esquema (`https://…`), no acepta `ignite.com` pelado.
+        address:            { type: string, nullable: true, maxLength: 255 }
+        address2:           { type: string, nullable: true, maxLength: 255, example: "Piso 2, Depto B" }
+        landmark:
+          type: string
+          nullable: true
+          maxLength: 255
+          description: Referencia de ubicación en texto libre.
+          example: "Frente al Centro Cívico"
+        postal_code:        { type: string, nullable: true, maxLength: 20 }
+        city_id:            { type: integer, nullable: true, example: 5 }
+        state_id:           { type: integer, nullable: true, example: 18 }
+        country_id:
+          type: string
+          nullable: true
+          maxLength: 10
+          description: Código de país. **No confundir con `country`**, que no existe.
+          example: "AR"
+        currency_id:
+          type: string
+          nullable: true
+          maxLength: 4
+          description: Código de moneda. **No confundir con `currency`**, que no existe.
+          example: "ARS"
+        language_id:
+          type: string
+          nullable: true
+          maxLength: 4
+          description: Código de idioma. **No confundir con `language`**, que no existe.
+          example: "es"
+        timezone:
+          type: string
+          nullable: true
+          description: Identificador IANA. Validado con la regla `timezone` contra el catálogo de PHP.
+          example: "America/Argentina/Bariloche"
+        latitude:
+          type: number
+          nullable: true
+          minimum: -90
+          maximum: 90
+          example: -41.133472
+        longitude:
+          type: number
+          nullable: true
+          minimum: -180
+          maximum: 180
+          example: -71.310028
+        file_number:        { type: string, nullable: true, maxLength: 50 }
+        tax_identification:
+          type: string
+          nullable: true
+          maxLength: 50
+          description: CUIT / identificación fiscal. **No confundir con `tax_id`**, que no existe.
+          example: "30-12345678-9"
+        channel_code:       { type: string, nullable: true, maxLength: 50 }
+        bank_data:          { type: string, nullable: true }
+        comment:            { type: string, nullable: true }
+        enabled:
+          type: boolean
+          nullable: true
+          description: Publicado / despublicado.
+        active:             { type: boolean, nullable: true }
+        test:               { type: boolean, nullable: true }
+        expiration:         { type: string, format: date, nullable: true }

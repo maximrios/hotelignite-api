@@ -27,7 +27,9 @@ return new class extends Migration
 
         Schema::create('accommodation_client', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('accommodation_id')->constrained('accommodations')->cascadeOnDelete();
+            // Sin FK: `accommodations.id` es `bigint` con signo en la BD legacy,
+            // incompatible con el `bigint unsigned` de `foreignId()`.
+            $table->unsignedBigInteger('accommodation_id')->index();
             $table->foreignId('client_id')->constrained('clients')->cascadeOnDelete();
             $table->timestamps();
             $table->unique(['accommodation_id', 'client_id']);

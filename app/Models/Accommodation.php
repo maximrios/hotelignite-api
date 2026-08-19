@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Accommodation extends Model
 {
@@ -11,6 +12,8 @@ class Accommodation extends Model
         'plan_id',
         'type_id',
         'name',
+        'legal_name',
+        'stars',
         'slug',
         'email',
         'phone',
@@ -18,6 +21,8 @@ class Accommodation extends Model
         'phone_reservations',
         'web',
         'address',
+        'address2',
+        'landmark',
         'postal_code',
         'city_id',
         'state_id',
@@ -27,6 +32,8 @@ class Accommodation extends Model
         'file_number',
         'tax_identification',
         'currency_id',
+        'language_id',
+        'timezone',
         'channel_code',
         'bank_data',
         'comment',
@@ -39,9 +46,45 @@ class Accommodation extends Model
 
     protected $casts = [
         'enabled' => 'boolean',
-        'active'  => 'boolean',
-        'test'    => 'boolean',
+        'active' => 'boolean',
+        'test' => 'boolean',
+        'stars' => 'integer',
     ];
+
+    /**
+     * Genera un slug único a partir del nombre cuando falta. Se dispara en cada
+     * save (create y update): si el accommodation ya tiene slug no se toca —
+     * los slugs son estables para no romper los links de los portales.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Accommodation $accommodation) {
+            if (empty($accommodation->slug) && ! empty($accommodation->name)) {
+                $accommodation->slug = static::generateUniqueSlug($accommodation->name, $accommodation->id);
+            }
+        });
+    }
+
+    /**
+     * Slug único basado en el nombre; agrega sufijo -2, -3, … si colisiona.
+     */
+    protected static function generateUniqueSlug(string $name, ?int $ignoreId = null): string
+    {
+        $base = Str::slug($name) ?: 'alojamiento';
+        $slug = $base;
+        $suffix = 2;
+
+        while (
+            static::where('slug', $slug)
+                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
+                ->exists()
+        ) {
+            $slug = "{$base}-{$suffix}";
+            $suffix++;
+        }
+
+        return $slug;
+    }
 
     public function account()
     {
@@ -50,7 +93,31 @@ class Accommodation extends Model
 
     public function clients()
     {
-        return $this->belongsToMany(Client::class, 'accommodation_client');
+        return $this->belongsToMany(Client::class, 'accommodation_client')
+            ->withPivot(['status', 'verified_at', 'verified_by_user_id', 'invitation_id'])
+            ->withTimestamps();
+    }
+
+    /**
+     * Canales a los que este alojamiento está conectado. El pivote lleva las
+     * condiciones propias del hotel (comisión negociada, código externo) —
+     * `channels.commission_rate` es sólo el default del catálogo.
+     */
+    public function channels()
+    {
+        return $this->belongsToMany(Channel::class, AccommodationChannel::class, 'accommodation_id', 'channel_id')
+            ->withPivot(['enabled', 'commission_rate', 'external_code'])
+            ->withTimestamps();
+    }
+
+    public function invitations()
+    {
+        return $this->hasMany(Invitation::class);
+    }
+
+    public function documents()
+    {
+        return $this->morphMany(Document::class, 'documentable');
     }
 
     /**
@@ -65,7 +132,26 @@ class Accommodation extends Model
         }
 
         if ($user->isClient()) {
-            return $query->whereHas('clients', fn ($q) => $q->where('clients.id', $user->client_id));
+            // Solo los vínculos `active` cuentan: el pivote nace `pending` y el
+            // client no ve el alojamiento en su padrón hasta que el staff lo
+            // aprueba (§8 de la skill de invitaciones).
+            return $query->whereHas('clients', fn ($q) => $q->where('clients.id', $user->client_id)
+                ->where('accommodation_client.status', 'active'));
+        }
+
+        // account: si tiene un acotamiento explícito (pivote accommodation_user),
+        // ve solo esos; si no, toda su cuenta —conjunto dinámico que crece con
+        // cada alta. Espejo de la rama de client de arriba.
+        $scopedIds = $user->accommodations()->pluck('accommodations.id');
+
+        if ($scopedIds->isNotEmpty()) {
+            return $query->whereIn('id', $scopedIds);
+        }
+
+        // Sin cuenta no hay nada visible. Sin este corte, where('account_id', null)
+        // compila a "account_id is null" y expondría los alojamientos huérfanos.
+        if ($user->account_id === null) {
+            return $query->whereRaw('1 = 0');
         }
 
         return $query->where('account_id', $user->account_id);
