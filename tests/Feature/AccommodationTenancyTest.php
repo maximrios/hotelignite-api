@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
@@ -78,7 +79,7 @@ class AccommodationTenancyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_solo_ve_sus_accommodations_en_el_listado(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -89,7 +90,7 @@ class AccommodationTenancyTest extends TestCase
         $this->assertFalse($ids->contains($this->accB->id), 'No debe ver el de otra cuenta');
     }
 
-    /** @test */
+    #[Test]
     public function account_user_acotado_solo_ve_los_alojamientos_de_su_pivote(): void
     {
         // Segundo alojamiento en la MISMA cuenta A, para probar el narrowing
@@ -113,7 +114,7 @@ class AccommodationTenancyTest extends TestCase
         $this->assertFalse($ids->contains($this->accB->id), 'Nunca ve el de otra cuenta');
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_ver_accommodation_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -121,7 +122,7 @@ class AccommodationTenancyTest extends TestCase
         $this->getJson("/api/admin/v1/accommodations/{$this->accB->id}")->assertForbidden();
     }
 
-    /** @test */
+    #[Test]
     public function account_user_acotado_no_puede_ver_ni_editar_otro_de_su_cuenta(): void
     {
         // Sin este corte el acotamiento sería solo cosmético: se ocultaría en el
@@ -146,7 +147,7 @@ class AccommodationTenancyTest extends TestCase
         $this->getJson("/api/admin/v1/accommodations/{$this->accA->id}")->assertOk();
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_editar_accommodation_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -157,7 +158,7 @@ class AccommodationTenancyTest extends TestCase
         $this->assertDatabaseHas('accommodations', ['id' => $this->accB->id, 'name' => 'Hotel B test']);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_borrar_accommodation_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -166,7 +167,7 @@ class AccommodationTenancyTest extends TestCase
         $this->assertDatabaseHas('accommodations', ['id' => $this->accB->id]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_puede_editar_su_propio_accommodation(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -177,7 +178,7 @@ class AccommodationTenancyTest extends TestCase
         $this->assertDatabaseHas('accommodations', ['id' => $this->accA->id, 'name' => 'Hotel A editado']);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_reasignar_su_accommodation_a_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -194,7 +195,7 @@ class AccommodationTenancyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_crea_en_su_propia_cuenta_aunque_pida_otra(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -211,7 +212,7 @@ class AccommodationTenancyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function client_user_no_puede_escribir(): void
     {
         $client = Client::create(['name' => 'Agencia test']);
@@ -227,7 +228,7 @@ class AccommodationTenancyTest extends TestCase
         $this->postJson('/api/admin/v1/accommodations', ['name' => 'X'])->assertForbidden();
     }
 
-    /** @test */
+    #[Test]
     public function client_user_solo_ve_accommodations_relacionados(): void
     {
         $client = Client::create(['name' => 'Agencia test']);
@@ -248,7 +249,7 @@ class AccommodationTenancyTest extends TestCase
         $this->assertFalse($ids->contains($this->accB->id), 'No ve el no relacionado');
     }
 
-    /** @test */
+    #[Test]
     public function platform_user_ve_todo(): void
     {
         $user = User::create([

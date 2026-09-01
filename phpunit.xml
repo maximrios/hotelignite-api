@@ -1,45 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="./vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
-         colors="true"
->
-    <testsuites>
-        <testsuite name="Unit">
-            <directory suffix="Test.php">./tests/Unit</directory>
-        </testsuite>
-        <testsuite name="Feature">
-            <directory suffix="Test.php">./tests/Feature</directory>
-        </testsuite>
-    </testsuites>
-    <coverage processUncoveredFiles="true">
-        <include>
-            <directory suffix=".php">./app</directory>
-        </include>
-    </coverage>
-    <php>
-        <env name="APP_ENV" value="testing"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="CACHE_DRIVER" value="array"/>
-        <!--
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd" bootstrap="vendor/autoload.php" colors="true" cacheDirectory=".phpunit.cache">
+  <testsuites>
+    <testsuite name="Unit">
+      <directory suffix="Test.php">./tests/Unit</directory>
+    </testsuite>
+    <testsuite name="Feature">
+      <directory suffix="Test.php">./tests/Feature</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="APP_ENV" value="testing"/>
+    <env name="BCRYPT_ROUNDS" value="4"/>
+    <env name="CACHE_DRIVER" value="array"/>
+    <!--
             Base dedicada para tests. NO apuntar esto a la base de desarrollo:
-            los tests del scaffolding de Laravel (tests/Feature/Auth/*) usan
-            RefreshDatabase, que ejecuta migrate:fresh y dropea todas las tablas.
-            Con datos reales en dev (76 alojamientos, 1356 reservas), correr un
-            solo test de esos la destruye.
+            cualquier test con RefreshDatabase ejecuta migrate:fresh y dropea
+            todas las tablas. Con datos reales en dev (77 alojamientos, 1356
+            reservas), una sola corrida la destruye.
 
-            Alta de la base de tests, replicando el esquema legacy del dump:
-              mysqldump -u<user> -p <db_dev> | mysql -u<user> -p hotelignite_testing
+            Hoy la suite entera usa DatabaseTransactions, porque el esquema
+            viene del dump legacy y `php artisan migrate` no corre desde cero
+            (ver docs/migrations-and-ci-plan.md). Alta de la base de tests:
+              mysqldump <db_dev> | mysql hotelignite_testing
         -->
-        <env name="DB_DATABASE" value="hotelignite_testing"/>
-
-        <!-- sqlite en memoria no sirve todavía: hay migraciones con SQL crudo
+    <env name="DB_DATABASE" value="hotelignite_testing"/>
+    <!-- sqlite en memoria no sirve todavía: hay migraciones con SQL crudo
              de MySQL (DB::unprepared) que no corren en sqlite. -->
-        <!-- <env name="DB_CONNECTION" value="sqlite"/> -->
-        <!-- <env name="DB_DATABASE" value=":memory:"/> -->
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-    </php>
+    <env name="MAIL_MAILER" value="array"/>
+    <env name="QUEUE_CONNECTION" value="sync"/>
+    <env name="SESSION_DRIVER" value="array"/>
+    <env name="TELESCOPE_ENABLED" value="false"/>
+  </php>
+  <source>
+    <include>
+      <directory suffix=".php">./app</directory>
+    </include>
+  </source>
 </phpunit>

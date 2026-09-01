@@ -1,0 +1,36 @@
+# Contexto de build = api/ (ver docker/Dockerfile).
+# Solo entra lo que la imagen necesita.
+.git
+.gitignore
+.gitattributes
+.editorconfig
+.claude
+DEPLOY.md
+docs
+node_modules
+vendor
+tests
+phpunit.xml
+.phpunit.result.cache
+.env
+.env.*
+**/.env
+**/.env.*
+storage
+public/storage
+bootstrap/cache/*.php
+**/.DS_Store
+
+# Restos root-owned de builds viejos: `_docker-root-junk/` (montajes que docker
+# creó en el árbol) y `docker/config/` (configs de nginx/php que hoy se copian
+# una por una desde `docker/`, ver Dockerfile). El `COPY . .` se los llevaba
+# adentro de la imagen de producción.
+_docker-root-junk
+docker/config
+
+# Lo demás de `docker/` tampoco hace falta dentro de la imagen: el Dockerfile
+# copia los archivos que usa explícitamente, y acá viajarían el compose de
+# producción y el script de backup.
+docker/docker-compose.prod.yml
+docker/backup.sh
+docker/.env.production*

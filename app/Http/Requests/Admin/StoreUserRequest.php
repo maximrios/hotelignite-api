@@ -52,12 +52,19 @@ class StoreUserRequest extends FormRequest
                 return;
             }
 
-            AccommodationScopeRule::validate(
-                $validator,
-                $this->accommodationIds(),
-                $this->input('user_type'),
-                $this->integer('account_id'),
-            );
+            // Se le pasa el input CRUDO, no accommodationIds(): ese helper ya
+            // filtra a [] cuando el tipo no es account, y la regla corta en
+            // seco con un array vacío — con lo que su guarda de "solo un
+            // account lleva acotamiento" nunca llegaba a dispararse. Mismo
+            // criterio que UpdateUserRequest.
+            if ($this->has('accommodation_ids')) {
+                AccommodationScopeRule::validate(
+                    $validator,
+                    array_map('intval', $this->input('accommodation_ids', [])),
+                    $this->input('user_type'),
+                    $this->integer('account_id'),
+                );
+            }
         });
     }
 

@@ -1,52 +1,24 @@
 <?php
 
-use App\Http\Controllers\ClientController;
-use Illuminate\Support\Str;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ProfileController;
-
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 |
-| Here is where you can register web routes for your application. These
-| routes are loaded by the RouteServiceProvider within a group which
-| contains the "web" middleware group. Now create something great!
+| Sin rutas. Esto es una API: todo entra por routes/api.php (Sanctum) o por
+| routes/client-api.php (API key de client).
+|
+| Acá vivía el scaffolding de Laravel Breeze, retirado el 2026-08-30. Exponía
+| sobre el dominio de la API, y sin ningún throttle porque el grupo `web` no lo
+| tiene: `POST /register` (alta de usuarios anónima e ilimitada), `POST /login`
+| (fuerza bruta sin freno, en paralelo al `throttle:login` que sí protege
+| /api/auth/login), `POST /forgot-password` (envío de mail disparado por
+| anónimos) y `GET /redirect`, una ruta de debug de Passport que redirigía a
+| third-party-app.com. Ningún frontend del monorepo las consumía.
+|
+| Ver docs/production-readiness.md §1.
+|
+| El healthcheck es /healthz y lo resuelve nginx sin llegar a PHP
+| (docker/nginx.conf).
 |
 */
-
-Route::get('/', function () {
-    return view('welcome');
-});
-
-Route::get('/dashboard', function () {
-    return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
-
-Route::middleware('auth')->group(function () {
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
-
-    Route::get('/clients', [ClientController::class, 'index'])->name('client.index');
-});
-
-Route::get('/redirect', function (Request $request) {
-    $request->session()->put('state', $state = Str::random(40));
- 
-    $query = http_build_query([
-        'client_id' => '5',
-        'redirect_uri' => 'http://third-party-app.com/callback',
-        'response_type' => 'code',
-        'scope' => '',
-        'state' => $state,
-        'prompt' => 'consent', // "none", "consent", or "login"
-    ]);
- 
-    return redirect('http://localhost/oauth/authorize?'.$query);
-});
-
-require __DIR__.'/auth.php';

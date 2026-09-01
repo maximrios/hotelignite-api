@@ -12,7 +12,9 @@ use App\Models\RoomType;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
@@ -76,17 +78,22 @@ class ChildResourceTenancyTest extends TestCase
     }
 
     /**
-     * `rooms` y `room_types` son tablas legacy: usan `created`/`modified` en vez
-     * de timestamps de Eloquent, así que los fixtures se insertan en crudo.
-     * Ver la nota sobre la divergencia de esquema en docs/security-hardening-plan.md.
+     * Los fixtures se insertan en crudo porque el esquema viene del dump legacy
+     * y las factories no lo cubren.
+     *
+     * `room_types` ya está normalizada: no tiene `name` (el nombre vive en
+     * `room_type_descriptions`, multilenguaje) ni `created`/`modified` — usa
+     * `created_at`/`updated_at`. `rooms`, en cambio, todavía conserva las dos
+     * columnas legacy además de los timestamps.
      */
     private function createRoomType(Accommodation $accommodation): RoomType
     {
         $id = DB::table('room_types')->insertGetId([
             'accommodation_id' => $accommodation->id,
-            'name' => 'Tipo test',
-            'created' => now(),
-            'modified' => now(),
+            'slug' => 'tipo-test-'.uniqid(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         return RoomType::findOrFail($id);
@@ -119,13 +126,20 @@ class ChildResourceTenancyTest extends TestCase
     /**
      * `reservations` es una tabla legacy con muchas columnas obligatorias, así
      * que se inserta en crudo en vez de por el modelo.
+     *
+     * Su `id` es `char(36)`: dejó de autoincrementar en
+     * 2026_07_24_000001_change_reservations_id_to_uuid, así que el fixture tiene
+     * que generarlo (el modelo lo hace vía `HasUuids`, pero acá no pasa por él).
      */
-    private function createReservation(Accommodation $accommodation): int
+    private function createReservation(Accommodation $accommodation): string
     {
         $guestId = DB::table('guests')->value('id')
             ?? DB::table('guests')->insertGetId(['first_name' => 'Test', 'last_name' => 'Guest']);
 
-        return DB::table('reservations')->insertGetId([
+        $id = (string) Str::uuid();
+
+        DB::table('reservations')->insert([
+            'id' => $id,
             'accommodation_id' => $accommodation->id,
             'guest_id' => $guestId,
             'currency_id' => 'ARS',
@@ -139,6 +153,8 @@ class ChildResourceTenancyTest extends TestCase
             'created' => now(),
             'modified' => now(),
         ]);
+
+        return $id;
     }
 
     private function createBooking(Accommodation $accommodation): Booking
@@ -152,7 +168,7 @@ class ChildResourceTenancyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_solo_ve_sus_rooms(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -163,7 +179,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertFalse($ids->contains($this->roomB->id), 'No debe ver la de otra cuenta');
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_ver_room_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -171,7 +187,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->getJson("/api/v1/rooms/{$this->roomB->id}")->assertNotFound();
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_editar_room_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -182,7 +198,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertDatabaseHas('rooms', ['id' => $this->roomB->id, 'number' => '201']);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_borrar_room_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -192,16 +208,28 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertDatabaseHas('rooms', ['id' => $this->roomB->id]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_mudar_su_room_a_otro_alojamiento(): void
     {
-        // El repositorio descarta accommodation_id del payload de update, pero
-        // no se puede ejercitar por HTTP hasta reconciliar el esquema legacy de
-        // `rooms` (sin timestamps, cualquier UPDATE de Eloquent tira 500).
-        $this->markTestSkipped('Bloqueado por la divergencia de esquema en `rooms`.');
+        // `RoomRepository::update` descarta accommodation_id del payload: mudar
+        // una habitación a otro alojamiento es cambiarle el dueño, no editarla.
+        // El update debe tener éxito y aplicar el resto de los campos, pero la
+        // habitación tiene que quedarse donde estaba.
+        Sanctum::actingAs($this->accountUser($this->accountA));
+
+        $this->putJson("/api/v1/rooms/{$this->roomA->id}", [
+            'number' => '999',
+            'accommodation_id' => $this->accB->id,
+        ])->assertOk();
+
+        $this->assertDatabaseHas('rooms', [
+            'id' => $this->roomA->id,
+            'number' => '999',
+            'accommodation_id' => $this->accA->id,
+        ]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_crear_room_en_alojamiento_ajeno(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -215,7 +243,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertDatabaseMissing('rooms', ['number' => '999']);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_colgar_una_room_de_un_room_type_ajeno(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -229,7 +257,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertDatabaseMissing('rooms', ['number' => '998']);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_solo_ve_sus_room_types(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -243,7 +271,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertFalse($ids->contains($this->typeB->id));
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_editar_room_type_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -257,7 +285,7 @@ class ChildResourceTenancyTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_no_puede_borrar_room_type_de_otra_cuenta(): void
     {
         Sanctum::actingAs($this->accountUser($this->accountA));
@@ -268,7 +296,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertDatabaseHas('room_types', ['id' => $this->typeB->id]);
     }
 
-    /** @test */
+    #[Test]
     public function account_user_solo_ve_las_reservas_de_sus_alojamientos(): void
     {
         $reservationA = $this->createReservation($this->accA);
@@ -282,7 +310,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertFalse($ids->contains($reservationB), 'No debe ver la reserva de otra cuenta');
     }
 
-    /** @test */
+    #[Test]
     public function account_user_solo_ve_las_pre_reservas_de_sus_alojamientos(): void
     {
         $bookingA = $this->createBooking($this->accA);
@@ -296,7 +324,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertFalse($ids->contains($bookingB->id));
     }
 
-    /** @test */
+    #[Test]
     public function client_user_solo_ve_los_rooms_de_los_alojamientos_relacionados(): void
     {
         $client = Client::create(['name' => 'Agencia test']);
@@ -317,7 +345,7 @@ class ChildResourceTenancyTest extends TestCase
         $this->assertFalse($ids->contains($this->roomB->id), 'No ve los del no relacionado');
     }
 
-    /** @test */
+    #[Test]
     public function platform_user_ve_los_rooms_de_todas_las_cuentas(): void
     {
         $user = User::create([

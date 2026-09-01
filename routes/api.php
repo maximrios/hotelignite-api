@@ -31,7 +31,6 @@ use App\Http\Controllers\Api\V1\AccommodationPolicyTranslationController;
 use App\Http\Controllers\Api\V1\AccommodationRatePolicyController;
 use App\Http\Controllers\Api\V1\AccommodationServiceController as WebAccommodationServiceController;
 use App\Http\Controllers\Api\V1\AccommodationTypeController as WebAccommodationTypeController;
-use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\AccountTypeController;
 use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\ChannelController;
@@ -345,24 +344,17 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
         Route::delete('accommodation-descriptions', [AccommodationDescriptionController::class, 'destroy'])->name('accommodation-descriptions.destroy');
 
         /*
-        | CRUD legacy de cuentas. Queda detrás de `platform` porque no autorizaba
-        | nada: cualquier usuario autenticado —un hotelero de otra cuenta, un
-        | usuario de client B2B— podía listar, editar y borrar las 78 cuentas, y
-        | su Resource devuelve `accounts.token` (secreto de 40 caracteres) en
-        | todas las respuestas, índice incluido.
+        | El CRUD legacy de cuentas (`/api/v1/accounts`) se borró el 2026-08-31.
+        | No lo consumía ningún frontend del monorepo y su Resource devolvía
+        | `accounts.token` —un secreto de 40 caracteres— en todas las respuestas,
+        | índice incluido: quedaba en los logs del proxy y en el historial del
+        | browser de cualquiera que lo usara. Arrastraba además un `total` de
+        | paginación que ignoraba los filtros y un `destroy` que recibía el id
+        | por el cuerpo de un DELETE sin id en la ruta.
         |
-        | No lo consume ningún frontend del monorepo (se verificó en pms, crm,
-        | clients, electron y app), así que cerrarlo no rompe nada. Lo que se
-        | usa desde el CRM es `/api/admin/v1/accounts`, que sí tiene policy y un
-        | Resource sin el token.
+        | El CRUD vigente es `/api/admin/v1/accounts` (`Api\Admin\V1\AccountController`):
+        | tiene `AccountPolicy` y un Resource sin el token.
         */
-        Route::middleware('platform')->group(function () {
-            Route::get('accounts', [AccountController::class, 'index'])->name('accounts.index');
-            Route::get('accounts/{id}', [AccountController::class, 'show'])->name('accounts.show');
-            Route::post('accounts', [AccountController::class, 'store'])->name('accounts.store');
-            Route::put('accounts/{id}', [AccountController::class, 'update'])->name('accounts.update');
-            Route::delete('accounts', [AccountController::class, 'destroy'])->name('accounts.destroy');
-        });
 
         Route::get('account-types', [AccountTypeController::class, 'index'])->name('account-types.index');
         Route::get('plans', [PlanController::class, 'index'])->name('plans.index');

@@ -11,7 +11,6 @@ use App\Repositories\AccommodationRatePolicyRepository;
 use App\Repositories\AccommodationRespository;
 use App\Repositories\AccommodationServiceRepository;
 use App\Repositories\AccommodationTypeRepository;
-use App\Repositories\AccountRepository;
 use App\Repositories\BookingRepository;
 use App\Repositories\ChannelRepository;
 use App\Repositories\CityRepository;
@@ -24,7 +23,6 @@ use App\Repositories\Contracts\AccommodationPolicyTranslationInterface;
 use App\Repositories\Contracts\AccommodationRatePolicyInterface;
 use App\Repositories\Contracts\AccommodationServiceInterface;
 use App\Repositories\Contracts\AccommodationTypeInterface;
-use App\Repositories\Contracts\AccountInterface;
 use App\Repositories\Contracts\BookingInterface;
 use App\Repositories\Contracts\ChannelInterface;
 use App\Repositories\Contracts\CityInterface;
@@ -97,7 +95,6 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(RoomAvailabilityInterface::class, RoomAvailabilityRepository::class);
         $this->app->bind(RoomTypeBedInterface::class, RoomTypeBedRepository::class);
         $this->app->bind(AccommodationDescriptionInterface::class, AccommodationDescriptionRepository::class);
-        $this->app->bind(AccountInterface::class, AccountRepository::class);
         $this->app->bind(InvitationInterface::class, InvitationRepository::class);
         $this->app->bind(DocumentInterface::class, DocumentRepository::class);
     }

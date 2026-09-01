@@ -39,17 +39,15 @@ Every request flows: `Route → Controller → Repository (via Interface) → Mo
 #### Cuentas (tenants hoteleros)
 - `Account` — el hotelero dueño de uno o más `Accommodation`. Usa SoftDeletes. Tiene `plan`, `accountType`, `accommodations` y `users`.
 
-**Hay dos CRUD de `Account` y no son intercambiables.** El bueno es
-`/api/admin/v1/accounts` (`Api\Admin\V1\AccountController`): tiene `AccountPolicy`,
-pagina como el resto de admin y su Resource **no expone `accounts.token`**.
+**El CRUD de `Account` es `/api/admin/v1/accounts`** (`Api\Admin\V1\AccountController`):
+tiene `AccountPolicy`, pagina como el resto de admin y su Resource no expone
+`accounts.token`.
 
-El legacy `/api/v1/accounts` (`Api\V1\AccountController` + `AccountRepository`)
-quedó detrás del middleware `platform`, pero conserva tres defectos: su
-`V1\AccountResource` devuelve el `token` (secreto de 40 caracteres) en todas las
-respuestas, su `total` de paginación ignora los filtros aplicados —así que miente
-al buscar— y su `destroy` recibe el id por body de un `DELETE /accounts` sin id en
-la ruta. No lo consume ningún frontend del monorepo. **Para código nuevo usá el
-de admin.**
+Había un segundo CRUD legacy en `/api/v1/accounts`, **borrado el 2026-08-31**. Si
+lo ves referenciado en un doc viejo: devolvía el `token` de la cuenta (secreto de
+40 caracteres) en todas las respuestas, su `total` de paginación ignoraba los
+filtros —mentía al buscar— y su `destroy` recibía el id por el cuerpo de un
+`DELETE /accounts` sin id en la ruta. No lo consumía ningún frontend.
 
 Ojo al borrar: `accommodations.account_id` y `users.account_id` no tienen FK (el
 legacy los tiene como `int`, incompatible con el `bigint unsigned` de

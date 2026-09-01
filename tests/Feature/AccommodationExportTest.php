@@ -10,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 /**
@@ -75,7 +76,7 @@ class AccommodationExportTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function exporta_solo_el_padron_del_client_como_csv(): void
     {
         Sanctum::actingAs($this->clientUser());
@@ -92,7 +93,7 @@ class AccommodationExportTest extends TestCase
         $this->assertStringNotContainsString('Hotel Ajeno', $body, 'No exporta lo que no está en su pivote');
     }
 
-    /** @test */
+    #[Test]
     public function nunca_expone_datos_internos_del_hotelero(): void
     {
         // bank_data/tax_identification viven en el Resource de admin, no acá.
@@ -109,7 +110,7 @@ class AccommodationExportTest extends TestCase
         $this->assertStringNotContainsString('30-99999999-9', $body);
     }
 
-    /** @test */
+    #[Test]
     public function respeta_el_filtro_enabled(): void
     {
         // Un segundo alojamiento habilitado en el mismo padrón para contrastar.
@@ -139,7 +140,7 @@ class AccommodationExportTest extends TestCase
         $this->assertStringNotContainsString('Hotel Deshabilitado', $body);
     }
 
-    /** @test */
+    #[Test]
     public function honra_columnas_separador_y_sin_encabezados(): void
     {
         Sanctum::actingAs($this->clientUser());
@@ -155,7 +156,7 @@ class AccommodationExportTest extends TestCase
         $this->assertStringContainsString('Hotel Del Padrón', $body);
     }
 
-    /** @test */
+    #[Test]
     public function un_user_no_client_no_entra(): void
     {
         $account = Account::create(['name' => 'Cuenta hotelera test']);

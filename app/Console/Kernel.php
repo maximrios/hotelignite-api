@@ -15,7 +15,15 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // `SANCTUM_TOKEN_EXPIRATION` marca los tokens como vencidos pero no los
+        // borra: `personal_access_tokens` crecía sin techo con credenciales
+        // muertas. Se purgan con un día de gracia sobre el vencimiento, para no
+        // pisar una sesión que el usuario todavía podría estar renovando.
+        $schedule->command('sanctum:prune-expired --hours=24')->daily();
+
+        // Los jobs fallidos quedan para siempre en `failed_jobs`. Una semana
+        // alcanza para diagnosticar un envío de invitaciones que se cayó.
+        $schedule->command('queue:prune-failed --hours=168')->daily();
     }
 
     /**

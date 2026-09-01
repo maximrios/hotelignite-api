@@ -8,6 +8,13 @@ use Illuminate\Support\Facades\Schema;
  * Snapshot del esquema real de `reservations` (tabla legacy del dump, formalizada).
  * Idempotente: si la tabla ya existe (esta DB), es no-op. En una DB fresca la
  * crea tal cual está hoy (ids ya convertidos a bigint donde correspondía).
+ *
+ * Sin FK a `rooms`: en la BD legacy `rooms.id` es `int`, incompatible con el
+ * `bigint unsigned` de `foreignId()` — la decisión está documentada en
+ * `2026_03_25_000006_add_room_id_to_reservations_table`. El snapshot original
+ * traía esa FK por un error de transcripción (no existe ni en dev ni en
+ * producción) y hacía fallar `migrate` desde cero, porque `rooms` se crea doce
+ * migraciones más adelante.
  */
 return new class extends Migration
 {
@@ -84,8 +91,7 @@ CREATE TABLE `reservations` (
   KEY `reservations_room_id_foreign` (`room_id`),
   KEY `reservations_checkin_date_index` (`checkin_date`),
   KEY `reservations_checkout_date_index` (`checkout_date`),
-  KEY `reservations_status_id_index` (`status_id`),
-  CONSTRAINT `reservations_room_id_foreign` FOREIGN KEY (`room_id`) REFERENCES `rooms` (`id`) ON DELETE SET NULL
+  KEY `reservations_status_id_index` (`status_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
 SQL);
     }
