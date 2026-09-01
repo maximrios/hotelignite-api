@@ -1,8 +1,34 @@
 # Deploy en el VPS — API HotelIgnite
 
-Stack de producción: **Traefik** (TLS automático con Let's Encrypt, rate limit
-y límite de conexiones en vuelo) → **nginx + php-fpm 8.4** (mismo contenedor) →
-**MySQL 8** + **Redis** (cache y rate limiter). Cuatro servicios.
+**En el VPS va sólo la API.** Los frontends (`crm/`, `clients/`, `pms/` y la web
+de TuriNorte) se despliegan en **Vercel**: no hay servicios de Next.js en este
+stack ni labels de Traefik para ellos. Lo único que necesitan de acá es que
+`https://api.tudominio.com` sea público y esté en `CORS_ALLOWED_ORIGINS`.
+
+## Dos stacks, no uno
+
+| Stack | Archivo | Qué corre | Alcance |
+|---|---|---|---|
+| **Borde** | `docker/docker-compose.traefik.yml` | Traefik (TLS + Let's Encrypt) | **Compartido por todo el VPS** |
+| **API** | `docker/docker-compose.prod.yml` | MySQL 8, Redis, nginx + php-fpm 8.4 | Sólo HotelIgnite |
+
+Están separados porque **los puertos 80 y 443 son únicos en la máquina**. Con el
+borde adentro del compose de la API, esa app pasaría a ser la dueña implícita del
+ingreso de todo el VPS: un `down` para actualizarla dejaría sin TLS a cualquier
+otro proyecto alojado ahí, y un `down -v` mal tipeado se llevaría `acme.json`
+—con Let's Encrypt limitando a 5 emisiones por dominio por semana, eso no se
+recupera en el momento—.
+
+Los dos se comunican por una red de Docker llamada `edge`, creada a mano y
+declarada `external` en ambos. Para publicar otro proyecto en este VPS no se
+toca nada de acá: se lo cuelga de `edge` y se le ponen sus propias labels de
+router.
+
+**Los middlewares de HotelIgnite viven en el router de la API, no en el
+entrypoint del borde.** En el entrypoint alcanzarían a todos los proyectos del
+VPS, y un rate limit calibrado para una API JSON (120 req/min) estrangularía a
+un sitio con imágenes. Es la consecuencia de compartir el borde y hay que
+respetarla al agregar el proyecto siguiente.
 
 A diferencia de `docker-compose.yml` (desarrollo, en la raíz del monorepo), acá
 **no hay bind mounts del código**: la imagen se construye con el código y el
@@ -13,40 +39,54 @@ Todo lo de deploy vive en `api/docker/`:
 
 | Archivo | Qué es |
 |---|---|
-| `docker/docker-compose.prod.yml` | Stack de producción (proyecto `hotelignite-prod`) |
+| `docker/docker-compose.traefik.yml` | Borde compartido del VPS (proyecto `edge`) |
+| `docker/.env.traefik.example` | Sus dos variables — copiar a `docker/.env.traefik` |
+| `docker/docker-compose.prod.yml` | Stack de la API (proyecto `hotelignite-prod`) |
 | `docker/.env.production.example` | Plantilla de variables — copiar a `docker/.env.production` |
 | `docker/Dockerfile` | Imagen única: php-fpm 8.4 + nginx + supervisord |
 | `docker/entrypoint.sh` | Espera MySQL, migra (opcional) y cachea config/rutas/vistas |
-| `docker/nginx.conf` | nginx de producción (gzip, cache, `/healthz`) |
+| `docker/nginx.conf` | nginx de producción (gzip, cache, CSP, `/healthz`) |
 | `docker/php.ini` | opcache, límites, errores al log |
 | `docker/php-fpm.conf` | Pool fpm, slowlog |
-| `docker/supervisord.conf` | Corre php-fpm y nginx dentro del contenedor |
+| `docker/supervisord.conf` | php-fpm, nginx, worker de colas y scheduler |
+| `docker/backup.sh` | Backup de la base y de `storage`, con `verify` |
 | `.dockerignore` | Queda en `api/` porque ése es la raíz del contexto de build |
 
 ## 1. Requisitos en el VPS
 
 - Docker Engine + plugin `compose` v2.
-- Puertos **80** y **443** libres (los toma Traefik; si ya corre otro Traefik o
-  nginx en el host, hay que apagarlo).
+- Puertos **80** y **443** libres. Los toma **Traefik**, y a partir de ahí son
+  suyos: si ya corre un nginx o un Apache en el host, apagalo — no lo conviertas
+  en un segundo borde. Todo lo que se publique en este VPS entra por Traefik.
 - DNS apuntando al VPS **antes** de levantar (Let's Encrypt valida por TLS-ALPN):
   `api.tudominio.com` → IP del VPS.
+- La red compartida, una sola vez:
+  ```bash
+  docker network create edge
+  ```
 
 ## 2. Configuración
 
+Dos archivos, uno por stack:
+
 ```bash
 cd api/docker
+cp .env.traefik.example    .env.traefik        # ACME_EMAIL, nivel de log
 cp .env.production.example .env.production
-chmod 600 .env.production
+chmod 600 .env.production                      # tiene contraseñas; el otro no
 $EDITOR .env.production
 ```
 
-Mínimo a completar:
+Mínimo a completar en `.env.production`:
 
-- `API_DOMAIN`, `ACME_EMAIL`
+- `API_DOMAIN` (el `ACME_EMAIL` ahora es del borde, va en `.env.traefik`)
 - `DB_PASSWORD`, `DB_ROOT_PASSWORD` (largos y distintos)
 - `APP_URL=https://api.tudominio.com`, `APP_DEBUG=false`
-- `CORS_ALLOWED_ORIGINS` / `SANCTUM_STATEFUL_DOMAINS` con los dominios de
-  `crm/`, `clients/` y `pms/`
+- `CORS_ALLOWED_ORIGINS` con **los dominios de Vercel** de los tres paneles.
+  Ojo con esto al desplegar: cada panel tiene su dominio de producción y además
+  una URL de preview por cada deploy. Las previews no van en la lista —
+  autorizarlas es dejar que cualquier branch hable con la API de producción. Si
+  hace falta una, usá `CORS_ALLOWED_ORIGIN_PATTERNS` con una regex acotada.
 - `APP_KEY`:
   ```bash
   docker compose --env-file .env.production -f docker-compose.prod.yml \
@@ -58,41 +98,80 @@ Mínimo a completar:
 `DB_HOST` y `DB_PORT` los fija el compose apuntando al servicio `db`: **no** los
 pongas en el `.env.production`.
 
-Para no repetir flags, parado en `api/docker/`:
+### `SANCTUM_STATEFUL_DOMAINS` no hace falta
+
+Está en la plantilla por herencia y no molesta, pero **no interviene en este
+flujo**. Los paneles no son SPAs con sesión por cookie contra la API: llaman a
+`/api/admin/v1` **desde el servidor de Next** con un Bearer token, y la cookie
+httpOnly (`hi_crm_token`, `hi_client_token`, `hi_token`) es de cada app en su
+propio dominio de Vercel, no de la API. Sanctum stateful es para el otro modelo.
+
+Consecuencia práctica de que las llamadas sean server-side, y conviene tenerla
+presente: **la API nunca ve la IP del usuario final**, ve la de la función de
+Vercel. Los throttles por IP de Laravel quedan gobernados en la práctica por la
+otra mitad de su clave (el email en `throttle:login`, el user id en
+`throttle:api`). Por eso el CRM tiene su propio freno de intentos de login
+(`crm/lib/auth/rate-limit.ts`), que es el único lugar donde la IP real es
+visible.
+
+Para no repetir flags, parado en `api/docker/`, un alias por stack:
 
 ```bash
+alias dce='docker compose --env-file .env.traefik    -f docker-compose.traefik.yml'
 alias dcp='docker compose --env-file .env.production -f docker-compose.prod.yml'
 ```
 
 ## 3. Primer deploy
 
+El orden importa: la red primero, después el borde, después la API. Si la API
+arranca sin la red `edge`, el compose falla con un error de red externa
+inexistente — no queda a medias.
+
+```bash
+docker network create edge     # una sola vez en el VPS
+dce up -d
+dce logs -f traefik            # dejalo mirando la emisión del certificado
+```
+
 ```bash
 dcp build
 dcp up -d
 dcp ps
-dcp logs -f traefik   # ver la emisión del certificado
 ```
 
 El contexto de build es `api/` (el compose usa `context: ..`), así que el
 `.dockerignore` que manda es `api/.dockerignore`.
 
-### Cargar la base
+### Comprobá que el contenedor **arranque**, no sólo que buildee
 
-`php artisan migrate` **no funciona desde cero** en este repo: la migración
-`2023_05_21_000015_create_reservations_table` crea una FK hacia `rooms`, tabla
-que se crea recién en `2026_03_25_000002_create_rooms_table`. Por eso
-`RUN_MIGRATIONS=false` viene por defecto.
+`dcp build` verde no dice nada sobre si el contenedor levanta. El 2026-08-31 la
+imagen buildeaba perfecto y php-fpm moría en el arranque por un comentario con
+`#` en `php-fpm.conf` (el parser INI de PHP sólo entiende `;`): supervisord lo
+daba por FATAL, bajaba el contenedor y desde afuera se veía un **502 de
+Traefik**, con la causa escondida en el log entre el arranque de los otros
+procesos.
 
-El camino sano es importar un dump del entorno actual (incluida la tabla
-`migrations`, así las nuevas migraciones se aplican encima):
+Dos chequeos, diez segundos:
 
 ```bash
-# en la máquina de desarrollo
-docker exec db mysqldump -uroot -p123456789 --single-transaction \
-    --routines --triggers hotelignite > backups/hotelignite.sql
+dcp logs api | grep RUNNING    # php-fpm, nginx, queue-worker y scheduler, los cuatro
+curl -sI https://api.tudominio.com/api/v1/accommodations | head -1   # 401 = vivo
+```
 
-# copiar al VPS y restaurar (la redirección ocurre en el host)
-dcp exec -T db sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < backups/hotelignite.sql
+### Cargar la base
+
+Desde el 2026-08-31 `php artisan migrate` **sí corre desde cero** (75
+migraciones, 0 pendientes, las mismas 28 foreign keys que la base de
+desarrollo). Pero eso te da el **esquema, no los datos**, así que para el primer
+deploy el camino sigue siendo importar un dump del entorno actual — incluida la
+tabla `migrations`, así las migraciones nuevas se aplican encima:
+
+```bash
+# en la máquina de desarrollo: el mismo script del backup diario
+cd api/docker && ./backup.sh          # deja el dump en /var/backups/hotelignite/daily
+
+# copiar el .sql.gz al VPS y restaurar (el zcat ocurre en el host)
+zcat db-*.sql.gz | dcp exec -T db sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
 ```
 
 Con el esquema cargado se puede poner `RUN_MIGRATIONS=true` para que cada
@@ -109,6 +188,10 @@ git pull                 # o rsync del código al VPS
 dcp build
 dcp up -d                # recrea api con la imagen nueva
 ```
+
+El borde no se toca: `dce` se corre una vez y queda. Actualizar la API **no**
+interrumpe a los otros proyectos del VPS — que es exactamente para lo que se
+separaron los dos stacks.
 
 El entrypoint recachea config, rutas y vistas en cada arranque. Como el código
 vive dentro de la imagen, **no** hace falta `artisan optimize` a mano.
@@ -186,9 +269,14 @@ dcp down                     # baja todo, conserva volúmenes
 Se sacaron del stack porque hoy la app no las usa. Si alguna hace falta:
 
 - **Dashboard de Traefik** — apagado con `--api.dashboard=false`. Para
-  encenderlo: volver a poner el flag en `true`, agregar el router
-  `Host(...)` con `service=api@internal` y protegerlo con un middleware
-  `basicauth`.
+  encenderlo: volver a poner el flag en `true` en
+  `docker-compose.traefik.yml`, agregar el router `Host(...)` con
+  `service=api@internal` y protegerlo con un middleware `basicauth`.
+- **Los frontends** (`crm/`, `clients/`, `pms/`, TuriNorte) — van a **Vercel**,
+  no a este VPS. Lo único que necesitan de acá es que la API sea pública por
+  https y que sus dominios estén en `CORS_ALLOWED_ORIGINS`. Si algún día alguno
+  se mudara al VPS, sería un compose propio colgado de `edge` con sus labels de
+  router; no un servicio de éste.
 
 ## 8. Detalles que conviene saber
 
@@ -203,9 +291,16 @@ Se sacaron del stack porque hoy la app no las usa. Si alguna hace falta:
 - **Scheduler**: un loop que llama `schedule:run` cada 60s, en vez de sumarle
   cron al contenedor. Hoy corre la purga de tokens de Sanctum vencidos y la de
   jobs fallidos de más de una semana (`app/Console/Kernel.php`).
-- **Redes**: `hotelignite_web` (Traefik ↔ api) y `hotelignite_internal`
-  (api ↔ MySQL, marcada `internal: true`, sin salida a internet). MySQL no
-  publica puertos al host: para un cliente SQL, túnel SSH o `dcp exec db mysql -u...`.
+- **Redes**: `edge` (Traefik ↔ api, compartida con el resto del VPS y creada a
+  mano) y `hotelignite_internal` (api ↔ MySQL ↔ Redis, marcada `internal: true`,
+  sin salida a internet). MySQL no publica puertos al host: para un cliente SQL,
+  túnel SSH o `dcp exec db mysql -u...`.
+
+  Que `edge` sea compartida tiene una consecuencia que conviene saber: **los
+  contenedores colgados de ella se ven entre sí**. Es la razón por la que la
+  base y Redis están en la red interna y no en `edge` — ahí serían alcanzables
+  desde cualquier otro proyecto del VPS. Al sumar un proyecto nuevo, poné en
+  `edge` sólo su contenedor web.
 - **HTTPS**: Traefik redirige 80 → 443, agrega HSTS, `X-Content-Type-Options`,
   `frameDeny`, `Referrer-Policy` y compresión. `TrustProxies` confía sólo en
   rangos privados (la red de Docker) para que Laravel genere URLs `https` detrás
@@ -227,19 +322,20 @@ Se sacaron del stack porque hoy la app no las usa. Si alguna hace falta:
   4.1.5 porque las versiones anteriores declaran `php <8.4` y hacían fallar el
   `composer install` de la imagen. Ambas siguen soportando 8.3, así que el
   entorno de desarrollo no cambia.
-- **Nombre de proyecto**: `hotelignite-prod`, distinto del de desarrollo
-  (`hotelignite`), para que un `up` de producción no pise contenedores locales.
-- **Frontends** (`crm/`, `clients/`, `electron/`, `pms/`): no están en este
-  compose. Se agregan como servicios con sus propias labels de Traefik
-  (`Host(...)` + `loadbalancer.server.port`) sobre la red `web`.
+- **Nombres de proyecto**: `edge` para el borde y `hotelignite-prod` para la API,
+  los dos distintos del de desarrollo (`hotelignite`), para que un `up` de
+  producción no pise contenedores locales.
 
 ## 9. Problemas frecuentes
 
 | Síntoma | Causa / solución |
 |---|---|
-| Traefik no emite certificado | DNS todavía no propagado, o el puerto 443 ocupado. `dcp logs traefik` |
+| `network edge declared as external, but could not be found` | Falta `docker network create edge`, o el borde nunca se levantó (§3) |
+| Traefik no emite certificado | DNS todavía no propagado, o el puerto 443 ocupado. `dce logs traefik` |
+| **404** en un dominio que debería andar | Traefik está vivo pero no encontró router: el contenedor no está en la red `edge`, le falta `traefik.enable=true`, o el `Host()` no coincide. `dce logs traefik \| grep -i error` |
 | `ERROR: APP_KEY vacío` | Falta `APP_KEY` en `.env.production` (ver §2) |
 | `MySQL no respondió en 60s` | El contenedor `db` no arranca: `dcp logs db`. Contraseña cambiada con el volumen ya inicializado → borrar el volumen o resetear la clave |
-| 502 desde Traefik | El contenedor `api` está reiniciando: `dcp logs api` |
+| **502** desde Traefik | El contenedor `api` está reiniciando: `dcp logs api`. Mirá primero si algún proceso de supervisord quedó en FATAL (§3) |
+| 429 en requests normales | El rate limit del borde (120/min por IP) está en el router `hi-api`. Si te pega a vos, es que las llamadas llegan todas desde una IP — ver la nota de Vercel en §2 |
 | Cambios de código que no se ven | Falta `dcp build` (opcache con `validate_timestamps=0` y código dentro de la imagen) |
 | `413 Request Entity Too Large` | Subir `client_max_body_size` en `docker/nginx.conf` y `upload_max_filesize`/`post_max_size` en `docker/php.ini` |

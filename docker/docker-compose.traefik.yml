@@ -1,0 +1,76 @@
+# Borde compartido del VPS: Traefik con TLS automático.
+#
+#   docker network create edge          # una sola vez, en el VPS
+#   docker compose --env-file .env.traefik -f docker-compose.traefik.yml up -d
+#
+# **Va aparte del stack de la API a propósito.** Los puertos 80 y 443 son únicos
+# en la máquina: si Traefik viviera dentro del compose de HotelIgnite, el segundo
+# proyecto que quisiera un dominio en este VPS no tendría dónde entrar, y un
+# `down` de la API se llevaría puesto el borde de todos los demás.
+#
+# Para publicar otro proyecto no se toca este archivo: se lo cuelga de la red
+# `edge` y se le ponen sus labels de router (`Host(...)` +
+# `loadbalancer.server.port`). Traefik lo descubre por el socket de Docker.
+#
+# Lo que NO está acá y es deliberado: los middlewares de HotelIgnite (rate limit,
+# in-flight, HSTS) van en el router de la API, no en el entrypoint. En el
+# entrypoint se aplicarían a **todos** los proyectos del VPS, y el rate limit de
+# una API JSON no es el que quiere un sitio con imágenes.
+
+name: edge
+
+services:
+  traefik:
+    image: traefik:v3.3
+    container_name: edge-traefik
+    restart: always
+    command:
+      - --global.sendAnonymousUsage=false
+      - --api.dashboard=false
+      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      - --accesslog=true
+      - --providers.docker=true
+      # Nada se publica solo: cada servicio pide su router con
+      # `traefik.enable=true`. En un VPS compartido esto evita exponer sin
+      # querer el contenedor que alguien levante para probar algo.
+      - --providers.docker.exposedByDefault=false
+      - --providers.docker.network=edge
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --entrypoints.websecure.address=:443
+      # El resolver es del borde porque el certificado lo emite el borde. Cada
+      # proyecto lo usa nombrándolo en su router; el almacenamiento es uno solo.
+      - --entrypoints.websecure.http.tls.certresolver=le
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?falta ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.tlschallenge=true
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Lectura del socket para descubrir contenedores. Sigue siendo la pieza
+      # más sensible del stack: quien comprometa Traefik puede enumerar y, en
+      # varias versiones, escalar a root en el host. La alternativa es
+      # `tecnativa/docker-socket-proxy` exponiendo sólo `CONTAINERS=1`.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Los certificados viven acá y sobreviven a cualquier `down` de los
+      # proyectos. Let's Encrypt limita a 5 emisiones por dominio por semana:
+      # borrar este volumen por accidente puede dejarte sin TLS por días.
+      - traefik_acme:/letsencrypt
+    networks:
+      - edge
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+volumes:
+  traefik_acme:
+
+networks:
+  edge:
+    name: edge
+    external: true

@@ -21,6 +21,15 @@ para el limiter, y el agujero de `X-Forwarded-For` que apareció al investigarlo
 que no estaba en la lista porque nadie había arrancado la imagen (ver abajo).
 Suite en **73/73 verde**.
 
+También cambió la forma del deploy: **Traefik salió del compose de la API** a
+`docker/docker-compose.traefik.yml`, un borde compartido por todo el VPS, porque
+los puertos 80 y 443 son únicos en la máquina y con el borde adentro un `down`
+de la API dejaba sin TLS a cualquier otro proyecto. Los middlewares
+(rate limit, in-flight, HSTS) se mudaron del entrypoint al router de la API: en
+el entrypoint alcanzaban a todos los proyectos. Verificado en local con los dos
+stacks levantados — redirect 80→443, ruteo, headers, y el rate limit cortando a
+las 67 requests de 250. Los frontends **no** van al VPS: van a Vercel.
+
 ### El bloqueante que faltaba: la imagen de producción no arrancaba
 
 `docker/php-fpm.conf` tenía el bloque de comentarios de `pm.max_children`
@@ -503,6 +512,13 @@ vistas, alcanza con `Content-Security-Policy: default-src 'none'; frame-ancestor
 en modo lectura sigue permitiendo enumerar y, en varias versiones, escalar. Quien
 comprometa Traefik es root en el host. Alternativa: `tecnativa/docker-socket-proxy`
 exponiendo sólo `CONTAINERS=1`.
+
+**Subió de prioridad el 31/08**, cuando Traefik pasó a ser el borde compartido
+del VPS (`docker/docker-compose.traefik.yml`). Antes comprometerlo daba acceso a
+un solo proyecto; ahora da visibilidad sobre todos los que convivan en la
+máquina. La red `edge` tiene el mismo efecto en menor escala: los contenedores
+colgados de ella se ven entre sí, y por eso MySQL y Redis siguen en la red
+`internal` y no ahí.
 
 **14. Purga de tokens — RESUELTO 31/08.** `app/Console/Kernel.php` corre
 `sanctum:prune-expired --hours=24` y `queue:prune-failed --hours=168`, ambas

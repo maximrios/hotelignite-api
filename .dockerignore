@@ -32,5 +32,7 @@ docker/config
 # copia los archivos que usa explícitamente, y acá viajarían el compose de
 # producción y el script de backup.
 docker/docker-compose.prod.yml
+docker/docker-compose.traefik.yml
 docker/backup.sh
 docker/.env.production*
+docker/.env.traefik*

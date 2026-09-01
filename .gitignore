@@ -7,6 +7,10 @@
 .env
 .env.backup
 .env.production
+# Variables del borde compartido (docker/.env.traefik). Hoy no lleva secretos
+# —email de ACME y nivel de log— pero es configuración de una máquina concreta,
+# no del repo, y mañana puede llevar credenciales de un DNS challenge.
+.env.traefik
 Homestead.json
 Homestead.yaml
 auth.json

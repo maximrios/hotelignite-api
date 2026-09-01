@@ -4,9 +4,21 @@
 #   cp .env.production.example .env.production && chmod 600 .env.production
 #   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 #
-# Cuatro servicios: Traefik (TLS), MySQL, Redis (cache + rate limiter) y el API
-# (nginx + php-fpm + worker de colas + scheduler, todos bajo supervisord en el
-# mismo contenedor — ver docker/supervisord.conf).
+# Tres servicios: MySQL, Redis (cache + rate limiter) y el API (nginx + php-fpm
+# + worker de colas + scheduler, todos bajo supervisord en el mismo contenedor —
+# ver docker/supervisord.conf).
+#
+# **El TLS no está acá.** Traefik vive en `docker-compose.traefik.yml`, un stack
+# aparte y compartido por todos los proyectos del VPS: los puertos 80 y 443 son
+# únicos en la máquina, así que si el borde fuera parte de este compose, bajar la
+# API para actualizarla dejaría sin entrada a todo lo demás. Este stack se cuelga
+# de la red `edge` y pide su router por labels.
+#
+# Orden de arranque en un VPS limpio:
+#
+#   docker network create edge
+#   docker compose --env-file .env.traefik    -f docker-compose.traefik.yml up -d
+#   docker compose --env-file .env.production -f docker-compose.prod.yml    up -d --build
 #
 # Los backups no son un servicio: `docker/backup.sh` corre por cron en el host.
 # Ver DEPLOY.md §5.
@@ -20,61 +32,6 @@ x-logging: &logging
     max-file: "5"
 
 services:
-  # ----------------------------------------------------------- Traefik (TLS)
-  traefik:
-    image: traefik:v3.3
-    container_name: hi-traefik
-    restart: always
-    command:
-      - --global.sendAnonymousUsage=false
-      - --api.dashboard=false
-      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
-      - --accesslog=true
-      - --providers.docker=true
-      - --providers.docker.exposedByDefault=false
-      - --providers.docker.network=hotelignite_web
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.web.http.redirections.entrypoint.permanent=true
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.websecure.http.tls.certresolver=le
-      - --entrypoints.websecure.http.middlewares=hi-secure@docker,hi-ratelimit@docker,hi-inflight@docker,hi-compress@docker
-      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?falta ACME_EMAIL}
-      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.le.acme.tlschallenge=true
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik_acme:/letsencrypt
-    networks:
-      - web
-    logging: *logging
-    labels:
-      # Middlewares que aplica el entrypoint websecure a todos los routers.
-      - traefik.enable=true
-      - traefik.http.middlewares.hi-compress.compress=true
-      - traefik.http.middlewares.hi-secure.headers.stsSeconds=31536000
-      - traefik.http.middlewares.hi-secure.headers.stsIncludeSubdomains=true
-      - traefik.http.middlewares.hi-secure.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.hi-secure.headers.frameDeny=true
-      - traefik.http.middlewares.hi-secure.headers.referrerPolicy=strict-origin-when-cross-origin
-      # Rate limit en el borde, ANTES de php-fpm. El throttle de Laravel corre
-      # dentro de PHP: para cuando decide rechazar, la request ya ocupó un worker
-      # de los pocos que hay. Esto frena el flood en Traefik, que no bloquea.
-      #
-      # sourceCriterion queda en su default: la IP del socket, NO X-Forwarded-For
-      # — un header no puede evadirlo.
-      - traefik.http.middlewares.hi-ratelimit.ratelimit.average=${RATELIMIT_AVERAGE:-120}
-      - traefik.http.middlewares.hi-ratelimit.ratelimit.burst=${RATELIMIT_BURST:-60}
-      - traefik.http.middlewares.hi-ratelimit.ratelimit.period=1m
-      # Tope de requests simultáneas por IP. Es el freno que importa contra el
-      # ataque realista: no un flood volumétrico, sino unas pocas requests lentas
-      # que ocupan todos los workers de php-fpm (pm.max_children).
-      - traefik.http.middlewares.hi-inflight.inflightreq.amount=${INFLIGHT_AMOUNT:-15}
-
   # ----------------------------------------------------------- MySQL
   db:
     image: mysql:8.0
@@ -153,7 +110,7 @@ services:
     volumes:
       - storage:/var/www/storage
     networks:
-      - web
+      - edge
       - internal
     depends_on:
       db:
@@ -163,20 +120,55 @@ services:
     logging: *logging
     labels:
       - traefik.enable=true
-      - traefik.docker.network=hotelignite_web
+      - traefik.docker.network=edge
       - traefik.http.routers.hi-api.rule=Host(`${API_DOMAIN:?falta API_DOMAIN}`)
       - traefik.http.routers.hi-api.entrypoints=websecure
       - traefik.http.routers.hi-api.tls.certresolver=le
       - traefik.http.services.hi-api.loadbalancer.server.port=80
 
+      # Los middlewares se aplican en ESTE router, no en el entrypoint del borde.
+      # En el entrypoint alcanzarían a todos los proyectos del VPS, y el límite
+      # pensado para una API JSON no es el que quiere un sitio con imágenes: el
+      # primer proyecto en levantarse le impondría su política a los demás.
+      - traefik.http.routers.hi-api.middlewares=hi-secure@docker,hi-ratelimit@docker,hi-inflight@docker,hi-compress@docker
+
+      - traefik.http.middlewares.hi-compress.compress=true
+      - traefik.http.middlewares.hi-secure.headers.stsSeconds=31536000
+      - traefik.http.middlewares.hi-secure.headers.stsIncludeSubdomains=true
+      - traefik.http.middlewares.hi-secure.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.hi-secure.headers.frameDeny=true
+      - traefik.http.middlewares.hi-secure.headers.referrerPolicy=strict-origin-when-cross-origin
+
+      # Rate limit en el borde, ANTES de php-fpm. El throttle de Laravel corre
+      # dentro de PHP: para cuando decide rechazar, la request ya ocupó un worker
+      # de los pocos que hay. Esto frena el flood en Traefik, que no bloquea.
+      #
+      # sourceCriterion queda en su default: la IP del socket, NO X-Forwarded-For
+      # — un header no puede evadirlo.
+      - traefik.http.middlewares.hi-ratelimit.ratelimit.average=${RATELIMIT_AVERAGE:-120}
+      - traefik.http.middlewares.hi-ratelimit.ratelimit.burst=${RATELIMIT_BURST:-60}
+      - traefik.http.middlewares.hi-ratelimit.ratelimit.period=1m
+
+      # Tope de requests simultáneas por IP. Es el freno que importa contra el
+      # ataque realista: no un flood volumétrico, sino unas pocas requests lentas
+      # que ocupan todos los workers de php-fpm (pm.max_children).
+      - traefik.http.middlewares.hi-inflight.inflightreq.amount=${INFLIGHT_AMOUNT:-15}
+
 volumes:
   db_data:
   storage:
-  traefik_acme:
 
 networks:
-  web:
-    name: hotelignite_web
+  # Red compartida del VPS, creada a mano (`docker network create edge`) y
+  # declarada `external` en los dos composes. Es un contrato entre proyectos:
+  # renombrarla los rompe a todos, así que no la toques sin mirar quién más está
+  # colgado de ella (`docker network inspect edge`).
+  edge:
+    name: edge
+    external: true
+
+  # Red privada: sólo api ↔ MySQL ↔ Redis. `internal: true` la deja sin salida a
+  # internet, y MySQL no publica puertos al host. Para un cliente SQL, túnel SSH.
   internal:
     name: hotelignite_internal
     internal: true
