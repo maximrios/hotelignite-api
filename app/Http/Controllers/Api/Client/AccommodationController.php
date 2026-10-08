@@ -2,10 +2,15 @@
 
 namespace App\Http\Controllers\Api\Client;
 
+use App\Http\Requests\Admin\NearbyPointsRequest;
 use App\Http\Requests\CheckAvailabilityRequest;
+use App\Http\Resources\Admin\PointOfInterestResource;
 use App\Http\Resources\Public\PublicAccommodationResource;
+use App\Http\Resources\Public\PublicPointOfInterestResource;
 use App\Models\Accommodation;
 use App\Models\AccommodationType;
+use App\Repositories\Contracts\PointOfInterestInterface;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 
@@ -33,6 +38,7 @@ class AccommodationController extends BaseController
 
         $accommodations = Accommodation::visibleTo($request->user())
             ->with(self::EAGER)
+            ->withCount('rooms')
             ->when($request->filled('city'), fn ($q) => $q->where('city_id', $request->query('city')))
             ->when($request->filled('type'), function ($q) use ($request) {
                 $slugs = explode(',', strtolower((string) $request->query('type')));
@@ -50,6 +56,7 @@ class AccommodationController extends BaseController
     {
         $accommodation = Accommodation::visibleTo($request->user())
             ->with(self::EAGER)
+            ->withCount('rooms')
             ->where('slug', $slug)
             ->first();
 
@@ -76,5 +83,37 @@ class AccommodationController extends BaseController
 
         return app(\App\Http\Controllers\Api\V1\AccommodationAvailabilityController::class)
             ->check($request, $id);
+    }
+
+    /**
+     * "Qué hay alrededor": puntos de interés cercanos a un accommodation visible
+     * para el client, agrupados por categoría raíz. Misma búsqueda que el
+     * `nearby-points` del panel, con la forma pública del POI.
+     */
+    public function nearbyPoints(NearbyPointsRequest $request, string $slug, PointOfInterestInterface $points): JsonResponse
+    {
+        $accommodation = Accommodation::visibleTo($request->user())
+            ->where('slug', $slug)
+            ->first();
+
+        if ($accommodation === null) {
+            return response()->json(['message' => 'Accommodation not found'], 404);
+        }
+
+        $nearby = $points->nearby($accommodation, $request->integer('limit_per_group', 5));
+
+        $nearby['groups'] = array_map(fn (array $group) => [
+            'category' => [
+                'slug' => $group['category']->slug,
+                'name' => $group['category']->name,
+                'icon' => $group['category']->icon,
+            ],
+            'items' => array_map(
+                fn (PointOfInterestResource $item) => (new PublicPointOfInterestResource($item->resource))->resolve($request),
+                $group['items'],
+            ),
+        ], $nearby['groups']);
+
+        return response()->json(['data' => $nearby]);
     }
 }

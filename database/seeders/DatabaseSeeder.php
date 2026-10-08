@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             PlanFeatureSeeder::class,
             DocumentTypeSeeder::class,
             ClientDocumentRequirementSeeder::class,
+            PoiCategorySeeder::class,
         ]);
     }
 }

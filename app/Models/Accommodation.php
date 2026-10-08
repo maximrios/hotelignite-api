@@ -44,6 +44,14 @@ class Accommodation extends Model
         'expiration',
     ];
 
+    /**
+     * `location` es una columna generada desde `latitude`/`longitude` (no se
+     * escribe) y sale como WKB hexadecimal: no sirve en ningún JSON.
+     */
+    protected $hidden = [
+        'location',
+    ];
+
     protected $casts = [
         'enabled' => 'boolean',
         'active' => 'boolean',
@@ -56,9 +64,48 @@ class Accommodation extends Model
      * save (create y update): si el accommodation ya tiene slug no se toca —
      * los slugs son estables para no romper los links de los portales.
      */
+    /**
+     * Columnas legacy `NOT NULL` con default "sin dato" (`'0'` / `0`), con ese
+     * default. Los FormRequests las validan `nullable` y el middleware
+     * `ConvertEmptyStringsToNull` convierte el `""` de un input vacío en `null`:
+     * sin esto, borrar el país o el teléfono desde el PMS termina en un 500
+     * (`Not null violation`). Se guarda el default, que es como el legacy
+     * representa el vacío.
+     */
+    private const LEGACY_NOT_NULL_DEFAULTS = [
+        'tax_identification' => '0',
+        'logo' => '0',
+        'account_id' => 0,
+        'name' => '0',
+        'address' => '0',
+        'email' => '0',
+        'phone' => '0',
+        'email_reservations' => '0',
+        'phone_reservations' => '0',
+        'web' => '0',
+        'latitude' => '0',
+        'longitude' => '0',
+        'postal_code' => '0',
+        'city_id' => 0,
+        'state_id' => 0,
+        'country_id' => '0',
+        'type_id' => 0,
+        'language_id' => '0',
+        'currency_id' => '0',
+        'token' => '0',
+        'enabled' => true,
+    ];
+
     protected static function booted(): void
     {
         static::saving(function (Accommodation $accommodation) {
+            $attributes = $accommodation->getAttributes();
+            foreach (self::LEGACY_NOT_NULL_DEFAULTS as $column => $default) {
+                if (array_key_exists($column, $attributes) && $attributes[$column] === null) {
+                    $accommodation->setAttribute($column, $default);
+                }
+            }
+
             if (empty($accommodation->slug) && ! empty($accommodation->name)) {
                 $accommodation->slug = static::generateUniqueSlug($accommodation->name, $accommodation->id);
             }

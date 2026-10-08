@@ -117,9 +117,11 @@ En dev se copiaron 68 tablas y 15.114 filas. Comprobaciones hechas:
    `unaccent` ya está; falta usarla en las búsquedas (`unaccent(col) ILIKE
    unaccent(?)`), idealmente con un índice de expresión, o sumar `pg_trgm` si
    además se quiere búsqueda difusa.
-2. **Geolocalización.** PostGIS está instalado, pero `accommodations.latitude` y
-   `longitude` siguen siendo varchar con default `'0'`. Falta una columna
-   `geography(Point, 4326)` con índice GiST para búsquedas por distancia.
+2. **Geolocalización.** Hecho (2026-10-08, migración `000012`): `accommodations.location`
+   es `geography(Point, 4326)` generada desde `latitude`/`longitude` (siguen siendo
+   varchar), con índice GiST. Coordenadas inválidas o fuera de rango → `NULL`. Lo usa
+   "En los alrededores" (`docs/points-of-interest-plan.md`). Quedan 5 alojamientos de
+   dev con coordenadas mal cargadas (ids 3, 10, 18, 22, 76) por corregir a mano.
 3. **`.env` del VPS**: dice todavía `DB_CONNECTION=mysql`. La app no lo usa (lo
    pisa el compose), pero `backup.sh` sí: hasta cambiarlo a `pgsql` el script
    intenta respaldar `hi-db`, que está apagado. El guard bloquea editarlo desde

@@ -39,12 +39,16 @@ use App\Repositories\Contracts\RoomTypeBedInterface;
 use App\Repositories\Contracts\RoomTypeDescriptionInterface;
 use App\Repositories\Contracts\RoomTypeInterface;
 use App\Repositories\Contracts\RoomTypeServiceInterface;
+use App\Repositories\Contracts\PoiCategoryInterface;
+use App\Repositories\Contracts\PointOfInterestInterface;
 use App\Repositories\Contracts\ServiceInterface;
 use App\Repositories\Contracts\TourInterface;
 use App\Repositories\Contracts\TravelAgencyInterface;
 use App\Repositories\DocumentRepository;
 use App\Repositories\InquiryRepository;
 use App\Repositories\InvitationRepository;
+use App\Repositories\PoiCategoryRepository;
+use App\Repositories\PointOfInterestRepository;
 use App\Repositories\PolicyRepository;
 use App\Repositories\RatePlanRepository;
 use App\Repositories\RateRepository;
@@ -70,6 +74,8 @@ class RepositoryServiceProvider extends ServiceProvider
     public function register()
     {
         $this->app->bind(AccommodationInterface::class, AccommodationRespository::class);
+        $this->app->bind(PoiCategoryInterface::class, PoiCategoryRepository::class);
+        $this->app->bind(PointOfInterestInterface::class, PointOfInterestRepository::class);
         $this->app->bind(AccommodationTypeInterface::class, AccommodationTypeRepository::class);
         $this->app->bind(TravelAgencyInterface::class, TravelAgencyRespository::class);
         $this->app->bind(TourInterface::class, TourRepository::class);

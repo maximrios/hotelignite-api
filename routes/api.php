@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\V1\AccommodationChannelController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationDocumentController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationImageController;
+use App\Http\Controllers\Api\Admin\V1\AccommodationNearbyPointController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationServiceController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationTypeController;
 use App\Http\Controllers\Api\Admin\V1\AccountController as AdminAccountController;
@@ -14,6 +15,8 @@ use App\Http\Controllers\Api\Admin\V1\ClientApiKeyController;
 use App\Http\Controllers\Api\Admin\V1\ClientController;
 use App\Http\Controllers\Api\Admin\V1\DocumentTypeController;
 use App\Http\Controllers\Api\Admin\V1\PlanController as AdminPlanController;
+use App\Http\Controllers\Api\Admin\V1\PoiCategoryController;
+use App\Http\Controllers\Api\Admin\V1\PointOfInterestController;
 use App\Http\Controllers\Api\Admin\V1\ServiceController;
 use App\Http\Controllers\Api\Admin\V1\StateController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
@@ -139,6 +142,16 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::get('channels', [AdminChannelController::class, 'index'])->name('admin.channels.index');
             Route::get('channels/{channel}', [AdminChannelController::class, 'show'])->name('admin.channels.show');
 
+            // Puntos de interés (docs/points-of-interest-plan.md). Lectura
+            // abierta: alimenta los selectores y el "En los alrededores" del
+            // PMS. La escritura queda en `platform`, más abajo.
+            Route::get('poi-categories', [PoiCategoryController::class, 'index'])->name('admin.poi-categories.index');
+            Route::get('poi-categories/{category}', [PoiCategoryController::class, 'show'])->name('admin.poi-categories.show');
+            Route::get('points-of-interest', [PointOfInterestController::class, 'index'])->name('admin.points-of-interest.index');
+            Route::get('points-of-interest/{poi}', [PointOfInterestController::class, 'show'])->name('admin.points-of-interest.show');
+            Route::get('accommodations/{accommodation}/nearby-points', [AccommodationNearbyPointController::class, 'index'])
+                ->name('admin.accommodations.nearby-points.index');
+
             Route::get('accommodation-types', [AccommodationTypeController::class, 'index'])->name('admin.accommodation-types.index');
             Route::get('accommodation-types/{type}', [AccommodationTypeController::class, 'show'])->name('admin.accommodation-types.show');
             Route::post('accommodation-types', [AccommodationTypeController::class, 'store'])->name('admin.accommodation-types.store');
@@ -220,6 +233,19 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
                     ->name('admin.channels.update');
                 Route::delete('channels/{channel}', [AdminChannelController::class, 'destroy'])
                     ->name('admin.channels.destroy');
+
+                // Escritura del catálogo de puntos de interés. En el MVP sólo
+                // carga el staff; la lectura queda arriba.
+                Route::post('poi-categories', [PoiCategoryController::class, 'store'])->name('admin.poi-categories.store');
+                Route::match(['put', 'patch'], 'poi-categories/{category}', [PoiCategoryController::class, 'update'])
+                    ->name('admin.poi-categories.update');
+                Route::delete('poi-categories/{category}', [PoiCategoryController::class, 'destroy'])
+                    ->name('admin.poi-categories.destroy');
+                Route::post('points-of-interest', [PointOfInterestController::class, 'store'])->name('admin.points-of-interest.store');
+                Route::match(['put', 'patch'], 'points-of-interest/{poi}', [PointOfInterestController::class, 'update'])
+                    ->name('admin.points-of-interest.update');
+                Route::delete('points-of-interest/{poi}', [PointOfInterestController::class, 'destroy'])
+                    ->name('admin.points-of-interest.destroy');
             });
         });
     });

@@ -30,6 +30,9 @@ class PublicAccommodationResource extends JsonResource
             'latitude' => $this->latitude,
             'longitude' => $this->longitude,
             'allow_bookings' => $this->allowsOnlineBookings(),
+            // Habitaciones físicas (`rooms`), no tipos: lo que el portal muestra
+            // como "N habitaciones". Sólo si el controller pidió `withCount('rooms')`.
+            'rooms_count' => $this->whenCounted('rooms'),
             'description' => $this->publicDescription(),
             'images' => PublicImageResource::collection($this->whenLoaded('images')),
             'services' => PublicServiceResource::collection($this->whenLoaded('services')),

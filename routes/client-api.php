@@ -25,6 +25,7 @@ Route::middleware(['json.response', 'auth.client', 'throttle:client'])->group(fu
     Route::get('accommodations', [AccommodationController::class, 'index'])->name('client.accommodations.index');
     Route::get('accommodations/{slug}', [AccommodationController::class, 'show'])->name('client.accommodations.show');
     Route::get('accommodations/{id}/availability', [AccommodationController::class, 'availability'])->name('client.accommodations.availability');
+    Route::get('accommodations/{slug}/nearby-points', [AccommodationController::class, 'nearbyPoints'])->name('client.accommodations.nearby-points');
 
     // Datos de referencia (catálogos compartidos)
     Route::get('cities', [CatalogController::class, 'cities'])->name('client.cities.index');
