@@ -1,7 +1,7 @@
 #!/bin/sh
 # Entrypoint de producción del API:
 #   - valida APP_KEY
-#   - espera a MySQL
+#   - espera a la base (Postgres desde 2026-10-08)
 #   - migra (si RUN_MIGRATIONS=true)
 #   - cachea config, rutas y vistas
 set -e
@@ -43,22 +43,22 @@ if [ -z "${APP_KEY:-}" ]; then
     exit 1
 fi
 
-# --------------------------------------------------------------- MySQL
+# --------------------------------------------------------------- base de datos
 DB_HOST="${DB_HOST:-db}"
 DB_PORT="${DB_PORT:-3306}"
 WAIT_FOR_DB_TIMEOUT="${WAIT_FOR_DB_TIMEOUT:-60}"
 
-log "esperando a MySQL en $DB_HOST:$DB_PORT (máx ${WAIT_FOR_DB_TIMEOUT}s)"
+log "esperando a la base en $DB_HOST:$DB_PORT (máx ${WAIT_FOR_DB_TIMEOUT}s)"
 waited=0
 while ! php -r 'exit(@fsockopen(getenv("DB_HOST"), (int) getenv("DB_PORT"), $e, $s, 2) ? 0 : 1);' 2>/dev/null; do
     waited=$((waited + 2))
     if [ "$waited" -ge "$WAIT_FOR_DB_TIMEOUT" ]; then
-        log "ERROR: MySQL no respondió en ${WAIT_FOR_DB_TIMEOUT}s"
+        log "ERROR: la base no respondió en ${WAIT_FOR_DB_TIMEOUT}s"
         exit 1
     fi
     sleep 2
 done
-log "MySQL disponible"
+log "base disponible"
 
 # --------------------------------------------------------------- Laravel
 php artisan config:clear >/dev/null 2>&1 || true

@@ -14,7 +14,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-DB_CONTAINER="${DB_CONTAINER:-hi-db}"
+DB_CONTAINER="${DB_CONTAINER:-}"
 STORAGE_VOLUME="${STORAGE_VOLUME:-hotelignite-prod_storage}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/hotelignite}"
 KEEP_DAILY="${KEEP_DAILY:-7}"
@@ -56,7 +56,22 @@ load_env() {
 load_env
 
 : "${DB_DATABASE:?falta DB_DATABASE en $ENV_FILE}"
-: "${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD en $ENV_FILE}"
+
+# Motor según DB_CONNECTION. Producción pasó a Postgres el 2026-10-08
+# (ver docs/postgres-migration.md); MySQL queda soportado para volver atrás.
+DB_ENGINE="${DB_CONNECTION:-mysql}"
+case "$DB_ENGINE" in
+    pgsql)
+        DB_CONTAINER="${DB_CONTAINER:-hi-pgsql}"
+        : "${DB_USERNAME:?falta DB_USERNAME en $ENV_FILE}"
+        : "${DB_PASSWORD:?falta DB_PASSWORD en $ENV_FILE}"
+        ;;
+    mysql)
+        DB_CONTAINER="${DB_CONTAINER:-hi-db}"
+        : "${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD en $ENV_FILE}"
+        ;;
+    *) die "DB_CONNECTION=$DB_ENGINE no soportado (mysql|pgsql)" ;;
+esac
 
 docker inspect "$DB_CONTAINER" >/dev/null 2>&1 || die "el contenedor $DB_CONTAINER no existe (¿el stack está levantado?)"
 
@@ -70,16 +85,8 @@ do_backup() {
     dump="$BACKUP_DIR/daily/db-$stamp.sql.gz"
     storage_tar="$BACKUP_DIR/daily/storage-$stamp.tar.gz"
 
-    # --single-transaction: dump consistente sin lockear las tablas InnoDB, o
-    # sea sin cortar el servicio mientras dura.
-    # La contraseña va por variable de entorno del propio mysqldump y no por
-    # línea de comandos: en `docker exec ... -p$PASS` queda visible en el `ps`
-    # del host.
-    log "dump de $DB_DATABASE"
-    docker exec -e MYSQL_PWD="$DB_ROOT_PASSWORD" "$DB_CONTAINER" \
-        mysqldump -uroot --single-transaction --quick --routines --triggers \
-        --default-character-set=utf8mb4 "$DB_DATABASE" \
-        | gzip -9 > "$dump.tmp"
+    log "dump de $DB_DATABASE ($DB_ENGINE)"
+    dump_db | gzip -9 > "$dump.tmp"
 
     # El pipe a gzip enmascara un mysqldump que falla: sin este chequeo el cron
     # guardaría felizmente un .sql.gz truncado y nadie se enteraría hasta el día
@@ -88,9 +95,9 @@ do_backup() {
         rm -f "$dump.tmp"
         die "el dump salió vacío o corrupto"
     fi
-    if ! zcat "$dump.tmp" | tail -5 | grep -q 'Dump completed'; then
+    if ! zcat "$dump.tmp" | tail -5 | grep -q "$(dump_marker)"; then
         rm -f "$dump.tmp"
-        die "el dump no terminó (falta el marcador 'Dump completed')"
+        die "el dump no terminó (falta el marcador '$(dump_marker)')"
     fi
     mv "$dump.tmp" "$dump"
     log "ok: $dump ($(du -h "$dump" | cut -f1))"
@@ -111,6 +118,28 @@ do_backup() {
 
     rotate
     offsite
+}
+
+# La contraseña va por variable de entorno del cliente (MYSQL_PWD / PGPASSWORD)
+# y no por línea de comandos: en `docker exec ... -p$PASS` queda visible en el
+# `ps` del host.
+dump_db() {
+    if [[ "$DB_ENGINE" == pgsql ]]; then
+        # Formato plano: se restaura con psql y el marcador final permite
+        # detectar un dump cortado. pg_dump toma un snapshot consistente sin
+        # bloquear escrituras.
+        docker exec -e PGPASSWORD="$DB_PASSWORD" "$DB_CONTAINER" \
+            pg_dump -U "$DB_USERNAME" --no-owner --no-privileges "$DB_DATABASE"
+    else
+        # --single-transaction: dump consistente sin lockear las tablas InnoDB.
+        docker exec -e MYSQL_PWD="$DB_ROOT_PASSWORD" "$DB_CONTAINER" \
+            mysqldump -uroot --single-transaction --quick --routines --triggers \
+            --default-character-set=utf8mb4 "$DB_DATABASE"
+    fi
+}
+
+dump_marker() {
+    [[ "$DB_ENGINE" == pgsql ]] && echo 'PostgreSQL database dump complete' || echo 'Dump completed'
 }
 
 rotate() {
@@ -156,11 +185,41 @@ do_verify() {
     scratch="verify_$(date +%s)"
     log "restaurando $(basename "$latest") en la base descartable $scratch"
 
+    if [[ "$DB_ENGINE" == pgsql ]]; then
+        verify_pgsql "$latest" "$scratch"
+    else
+        verify_mysql "$latest" "$scratch"
+    fi
+}
+
+verify_pgsql() {
+    local latest="$1" scratch="$2" tables
+    pg() { docker exec -i -e PGPASSWORD="$DB_PASSWORD" "$DB_CONTAINER" psql -U "$DB_USERNAME" -v ON_ERROR_STOP=1 -qAt "$@"; }
+
+    pg -d postgres -c "CREATE DATABASE \"$scratch\";"
+    # trap para que un fallo a mitad no deje la base de verificación colgada
+    # ocupando disco en el servidor.
+    trap 'docker exec -e PGPASSWORD="$DB_PASSWORD" "$DB_CONTAINER" psql -U "$DB_USERNAME" -d postgres -qc "DROP DATABASE IF EXISTS \"'"$scratch"'\";" || true' EXIT
+
+    zcat "$latest" | pg -d "$scratch" >/dev/null
+
+    tables="$(pg -d "$scratch" -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';")"
+    [[ "$tables" -gt 0 ]] || die "la restauración dejó 0 tablas"
+
+    log "restauración ok: $tables tablas"
+    log "conteos de control:"
+    docker exec -e PGPASSWORD="$DB_PASSWORD" "$DB_CONTAINER" psql -U "$DB_USERNAME" -d "$scratch" -c "
+        SELECT 'accommodations' AS tabla, COUNT(*) AS filas FROM accommodations
+        UNION ALL SELECT 'users', COUNT(*) FROM users
+        UNION ALL SELECT 'reservations', COUNT(*) FROM reservations;"
+}
+
+verify_mysql() {
+    local latest="$1" scratch="$2" tables
+
     docker exec -e MYSQL_PWD="$DB_ROOT_PASSWORD" "$DB_CONTAINER" \
         mysql -uroot -e "DROP DATABASE IF EXISTS \`$scratch\`; CREATE DATABASE \`$scratch\`;"
 
-    # trap para que un fallo a mitad no deje la base de verificación colgada
-    # ocupando disco en el servidor.
     trap 'docker exec -e MYSQL_PWD="$DB_ROOT_PASSWORD" "$DB_CONTAINER" mysql -uroot -e "DROP DATABASE IF EXISTS \`'"$scratch"'\`;" || true' EXIT
 
     zcat "$latest" | docker exec -i -e MYSQL_PWD="$DB_ROOT_PASSWORD" "$DB_CONTAINER" \

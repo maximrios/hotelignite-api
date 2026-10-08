@@ -32,8 +32,51 @@ x-logging: &logging
     max-file: "5"
 
 services:
-  # ----------------------------------------------------------- MySQL
+  # ----------------------------------------------------------- PostgreSQL
+  # Base de la API desde el 2026-10-08 (ver docs/postgres-migration.md).
+  # Parámetros chicos a propósito: el droplet tiene 957 MB y la base ronda los
+  # 30 MB. `max_connections` cubre php-fpm + worker + scheduler con margen.
+  # ICU es-AR: orden alfabético en español; sólo aplica al crear el volumen.
+  pgsql:
+    image: postgres:17-alpine
+    container_name: hi-pgsql
+    restart: always
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-64MB}
+      - -c
+      - effective_cache_size=256MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=40
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:?falta DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME:?falta DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=es-AR"
+      TZ: ${APP_TIMEZONE:-America/Argentina/Salta}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    logging: *logging
+
+  # ----------------------------------------------------------- MySQL (legacy)
+  # Apagado desde el pase a Postgres (2026-10-08). Se conserva el volumen y la
+  # definición para volver atrás o re-copiar:
+  #   docker compose --profile mysql-legacy up -d db
   db:
+    profiles: ["mysql-legacy"]
     image: mysql:8.0
     container_name: hi-db
     restart: always
@@ -103,8 +146,8 @@ services:
       - .env.production
     environment:
       # Red interna: no se configuran desde el .env.
-      DB_HOST: db
-      DB_PORT: "3306"
+      DB_HOST: pgsql
+      DB_PORT: "5432"
       REDIS_HOST: redis
       REDIS_PORT: "6379"
     volumes:
@@ -113,7 +156,7 @@ services:
       - edge
       - internal
     depends_on:
-      db:
+      pgsql:
         condition: service_healthy
       redis:
         condition: service_healthy
@@ -156,6 +199,7 @@ services:
 
 volumes:
   db_data:
+  pg_data:
   storage:
 
 networks:
