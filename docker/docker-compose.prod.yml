@@ -37,11 +37,13 @@ services:
   # Parámetros chicos a propósito: el droplet tiene 957 MB y la base ronda los
   # 30 MB. `max_connections` cubre php-fpm + worker + scheduler con margen.
   # ICU es-AR: orden alfabético en español; sólo aplica al crear el volumen.
-  # Imagen postgis/postgis (= postgres:17-alpine + PostGIS): las extensiones
-  # postgis y unaccent las crea la migración 2026_10_08_000010. MySQL se
-  # eliminó el 2026-10-08, con su volumen.
+  # Imagen propia (docker/postgres/Dockerfile): postgis/postgis:17-3.6-alpine
+  # + pgvector compilado. Extensiones postgis, unaccent y vector: las crean las
+  # migraciones 2026_10_08_000010/000011. MySQL se eliminó el 2026-10-08.
   pgsql:
-    image: postgis/postgis:17-3.6-alpine
+    build:
+      context: ./postgres
+    image: hotelignite/pgsql:17-3.6-pgvector0.8.7
     container_name: hi-pgsql
     restart: always
     command:

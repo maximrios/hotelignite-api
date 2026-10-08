@@ -7,15 +7,22 @@ máquina de dev y `~/backups/daily/db-2026-10-08-1258.sql.gz` en el VPS.
 
 ## Extensiones
 
-Imagen `postgis/postgis:17-3.6-alpine` en dev y en el VPS (es `postgres:17-alpine`
-más PostGIS; mismo datadir, misma versión de ICU). La migración
-`2026_10_08_000010_enable_unaccent_and_postgis_extensions` crea:
+Imagen propia `hotelignite/pgsql:17-3.6-pgvector0.8.7`, construida desde
+`docker/postgres/Dockerfile` en dev y en el VPS: `postgis/postgis:17-3.6-alpine`
+(= `postgres:17-alpine` + PostGIS; mismo datadir, misma versión de ICU) más
+pgvector 0.8.7 compilado. Las migraciones `2026_10_08_000010` y `000011` crean:
 
 - `unaccent` (contrib): `unaccent('Embarcación')` → `Embarcacion`.
 - `postgis` 3.6: tipos `geometry`/`geography` y funciones `ST_*`. Crea la tabla
   `spatial_ref_sys`, que Laravel ya excluye de `db:wipe`.
 
-Habilitarlas no cambia ninguna búsqueda todavía (ver Pendiente).
+- `vector` (pgvector 0.8.7): tipo `vector(n)` e índices HNSW/IVFFlat para
+  búsqueda semántica. Sin columnas todavía: la dimensión depende del modelo de
+  embeddings que se elija.
+
+Habilitarlas no cambia ninguna búsqueda todavía (ver Pendiente). Al subir la
+imagen base, revisar que la versión de clang/llvm del Dockerfile coincida con la
+de la imagen (pgvector necesita la misma para el bitcode JIT).
 
 ## Cutover de producción (2026-10-08, hecho)
 
