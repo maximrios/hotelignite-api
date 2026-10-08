@@ -1,7 +1,20 @@
 # Pase de MySQL a PostgreSQL 17
 
-Estado al 2026-10-08: **dev corre sobre Postgres**. Producción sigue en MySQL;
-el cutover del VPS no está hecho (ver "Pendiente").
+Estado al 2026-10-08: **dev y producción corren sobre Postgres 17.**
+
+## Cutover de producción (2026-10-08, hecho)
+
+- Servicio `pgsql` → contenedor `hi-pgsql` (`postgres:17-alpine`, ICU es-AR,
+  `shared_buffers=64MB`, `max_connections=40`), volumen `hotelignite-prod_pg_data`.
+- `DB_CONNECTION: pgsql` lo fija el `environment:` del compose (pisa al `.env`).
+- MySQL (`hi-db`) **apagado**: detrás del profile `mysql-legacy`, con
+  `restart=no`. Volumen `hotelignite-prod_db_data` intacto.
+- Backups previos en `~/backups/` del VPS: dump MySQL verificado (`daily/db-2026-10-08-1258.sql.gz`)
+  y dump Postgres post-cutover (`pgsql-postcutover-2026-10-08-1314.sql.gz`).
+- Copia: 68 tablas, 15.081 filas, todos los conteos iguales.
+- Rollback: imagen `hotelignite/api:pre-pgsql`, `docker-compose.yml.bak-2026-10-08-premysql`
+  y `.env.bak-2026-10-08-premysql` en `docker/`. Volver a MySQL pierde lo
+  escrito después del cutover.
 
 ## Qué cambió
 
@@ -92,14 +105,10 @@ recibe lo que se escribió después del pase.
    "embarcacion" no encuentra "Embarcación", y en MySQL (`*_ci`) sí. Se resuelve
    con la extensión `unaccent`, o con `pg_trgm` + `unaccent` si además se quiere
    búsqueda difusa.
-2. **Cutover de producción.** Hay que:
-   - decidir dónde corre Postgres 17 (el droplet tiene 957 MB; no conviene tener
-     MySQL y Postgres juntos más allá de la ventana de copia);
-   - pasar `docker/backup.sh` a `pg_dump`;
-   - actualizar el compose *untracked* del VPS;
-   - congelar escrituras, correr `migrate` y `db:copy-from-mysql`, y cambiar
-     `DB_*`.
-   Seguir el skill `deploy-vps`.
+2. **`.env` del VPS**: dice todavía `DB_CONNECTION=mysql`. La app no lo usa (lo
+   pisa el compose), pero `backup.sh` sí: hasta cambiarlo a `pgsql` el script
+   intenta respaldar `hi-db`, que está apagado. El guard bloquea editarlo desde
+   el agente; hay que hacerlo a mano. Después, cron de `backup.sh` con destino offsite.
 3. **FKs sobre `accommodation_id` / `account_id`.** El motivo para no tenerlas
    (signed vs unsigned) ya no existe en Postgres. Para agregarlas antes hay que
    limpiar huérfanos: por ejemplo, 37 filas de `reservation_rooms` apuntan a

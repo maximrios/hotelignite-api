@@ -95,7 +95,9 @@ do_backup() {
         rm -f "$dump.tmp"
         die "el dump salió vacío o corrupto"
     fi
-    if ! zcat "$dump.tmp" | tail -5 | grep -q "$(dump_marker)"; then
+    # tail -10 y no -5: pg_dump 17.6+ cierra con una línea `\unrestrict <token>`
+    # después del marcador.
+    if ! zcat "$dump.tmp" | tail -10 | grep -q "$(dump_marker)"; then
         rm -f "$dump.tmp"
         die "el dump no terminó (falta el marcador '$(dump_marker)')"
     fi

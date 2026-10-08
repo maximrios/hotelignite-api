@@ -146,6 +146,8 @@ services:
       - .env.production
     environment:
       # Red interna: no se configuran desde el .env.
+      # El motor también lo fija el stack (pisa al .env): pasó a Postgres el 2026-10-08.
+      DB_CONNECTION: pgsql
       DB_HOST: pgsql
       DB_PORT: "5432"
       REDIS_HOST: redis
