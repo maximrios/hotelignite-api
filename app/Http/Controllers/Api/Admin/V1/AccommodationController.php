@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use Illuminate\Http\Request;
-use App\Models\Accommodation;
+use App\Http\Requests\Admin\PatchAccommodationRequest;
 use App\Http\Requests\StoreAccommodationRequest;
 use App\Http\Requests\UpdateAccommodationRequest;
-use App\Http\Requests\Admin\PatchAccommodationRequest;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
-use Illuminate\Routing\Controller as BaseController;
 use App\Http\Resources\Admin\AccommodationResource;
 use App\Http\Resources\Admin\AccommodationResourceCollection;
+use App\Models\Accommodation;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
+use Illuminate\Routing\Controller as BaseController;
 
 class AccommodationController extends BaseController
 {
@@ -25,7 +25,7 @@ class AccommodationController extends BaseController
 
         $accommodations = Accommodation::with(['city', 'state', 'type'])
             ->visibleTo($user)
-            ->when($request->search, fn ($q, $search) => $q->where('name', 'like', "%{$search}%"))
+            ->when($request->search, fn ($q, $search) => $q->whereLike('name', "%{$search}%"))
             ->when($request->has('enabled'), fn ($q) => $q->where('enabled', $request->boolean('enabled')))
             // Solo platform puede filtrar por una cuenta arbitraria; el resto queda scopeado por visibleTo.
             ->when($user->isPlatform() && $request->account_id, fn ($q, $accountId) => $q->where('account_id', $accountId))

@@ -25,6 +25,8 @@ class ReservationRepository implements ReservationInterface
             // El id ya no es secuencial (UUID); ordenamos por la fecha de estancia
             // efectiva, contemplando filas legacy (arrival) y nuevas (checkin_date).
             ->orderByRaw('COALESCE(checkin_date, arrival) DESC')
+            // Desempate: sin un orden total, las páginas pueden repetir o saltear filas.
+            ->orderBy('id')
             ->paginate($request->integer('per_page', 25));
 
         return new ReservationResourceCollection($reservations);

@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\Web;
 
-use App\Models\Accommodation;
-use App\Models\AccommodationType;
 use App\Http\Requests\SearchAccommodationRequest;
-use Illuminate\Routing\Controller as BaseController;
 use App\Http\Resources\Web\AccommodationResource;
 use App\Http\Resources\Web\AccommodationResourceCollection;
+use App\Models\Accommodation;
+use App\Models\AccommodationType;
+use Illuminate\Routing\Controller as BaseController;
 
 class AccommodationController extends BaseController
 {
@@ -21,9 +21,10 @@ class AccommodationController extends BaseController
             ->when($request->type, function ($q, $type) {
                 $slugs = explode(',', strtolower($type));
                 $ids = AccommodationType::whereIn('slug', $slugs)->pluck('id');
+
                 return $q->whereIn('type_id', $ids);
             })
-            ->when($request->search, fn ($q, $search) => $q->where('name', 'like', "%{$search}%"))
+            ->when($request->search, fn ($q, $search) => $q->whereLike('name', "%{$search}%"))
             ->paginate($limit);
 
         return new AccommodationResourceCollection($accommodations);

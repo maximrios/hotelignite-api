@@ -51,7 +51,7 @@ class ChannelRepository implements ChannelInterface
         $perPage = min($request->integer('per_page', 25), 100);
 
         $channels = Channel::query()
-            ->when($request->filled('name'), fn ($q) => $q->where('name', 'like', '%'.$request->name.'%'))
+            ->when($request->filled('name'), fn ($q) => $q->whereLike('name', '%'.$request->name.'%'))
             ->when($request->filled('business_type'), fn ($q) => $q->where('business_type', $request->business_type))
             ->when($request->filled('connection_type'), fn ($q) => $q->where('connection_type', $request->connection_type))
             ->when($request->has('enabled'), fn ($q) => $q->where('enabled', $request->boolean('enabled')))

@@ -11,7 +11,7 @@ class StoreClientApiKeyRequest extends FormRequest
      * Abilities disponibles para una API key de client. Mantener alineado con
      * los checks de `client.ability` en routes/client-api.php.
      */
-    public const ABILITIES = ['catalog:read', 'booking:create'];
+    public const ABILITIES = ['catalog:read', 'booking:create', 'mcp:read'];
 
     public function authorize(): bool
     {

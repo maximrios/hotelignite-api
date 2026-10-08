@@ -34,8 +34,8 @@ class UserController extends BaseController
 
         $users = User::query()
             ->when($request->filled('search'), fn ($q) => $q->where(
-                fn ($sub) => $sub->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
+                fn ($sub) => $sub->whereLike('name', "%{$search}%")
+                    ->orWhereLike('email', "%{$search}%")
             ))
             ->when($request->filled('user_type'), fn ($q) => $q->where('user_type', $request->query('user_type')))
             ->when($request->filled('account_id'), fn ($q) => $q->where('account_id', $request->integer('account_id')))

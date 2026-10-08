@@ -49,7 +49,7 @@ class ServiceRepository implements ServiceInterface
                 $q->where('enabled', $request->boolean('enabled'));
             })
             ->when($request->filled('name'), function ($q) use ($request) {
-                $q->where('name', 'like', '%'.$request->name.'%');
+                $q->whereLike('name', '%'.$request->name.'%');
             })
             // `withCount` en vez de contar por fila desde el Resource: era una
             // query por servicio.

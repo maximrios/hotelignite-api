@@ -1,0 +1,224 @@
+{
+  "info": {
+    "name": "HotelIgnite API",
+    "description": "Colección de prueba de la API de HotelIgnite.\n\nEl request «Auth / Login» guarda el token en la variable de colección `token`; el resto de los requests lo usan vía Bearer heredado, así que no hay que copiarlo a mano.\n\nCambiá el entorno con la variable `base_url`:\n  - producción: https://api.hotelignite.com\n  - local:      http://api.hotelignite.local\n\nEl 401 en un endpoint protegido sin token es la respuesta correcta, no un error. Un 400 «Bad request.» significa que el header Host no coincide con APP_URL (middleware TrustHosts), no que la API esté caída.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://api.hotelignite.com", "type": "string" },
+    { "key": "email", "value": "postman@hotelignite.com", "type": "string" },
+    { "key": "password", "value": "Postman2026!", "type": "string" },
+    { "key": "token", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login (guarda el token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', function () { pm.response.to.have.status(200); });",
+                  "",
+                  "var data = pm.response.json();",
+                  "if (data && data.token) {",
+                  "    pm.collectionVariables.set('token', data.token);",
+                  "    console.log('Token guardado en la variable de colección.');",
+                  "} else {",
+                  "    console.log('La respuesta no trajo token:', pm.response.text());",
+                  "}",
+                  "",
+                  "pm.test('Devuelve un token Bearer', function () {",
+                  "    pm.expect(data).to.have.property('token');",
+                  "    pm.expect(data.token_type).to.eql('Bearer');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Accept", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"{{email}}\",\n    \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            },
+            "description": "Devuelve `{\"token\": \"<id>|<secreto>\", \"token_type\": \"Bearer\"}`.\n\nTiene `throttle:login` (5 intentos por minuto). Un 500 acá significa que la base no tiene esquema: falta importar el dump."
+          }
+        },
+        {
+          "name": "Usuario actual",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/user",
+              "host": ["{{base_url}}"],
+              "path": ["api", "user"]
+            },
+            "description": "Confirma que el token es válido y de qué usuario es."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Salud",
+      "item": [
+        {
+          "name": "Healthz (público)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/healthz",
+              "host": ["{{base_url}}"],
+              "path": ["healthz"]
+            },
+            "description": "Sólo existe en PRODUCCIÓN: lo define docker/nginx.conf, que es el nginx de la imagen. Contra el entorno local da 404, porque dev usa docker-api/nginx/conf.d/default.conf, que no tiene esa location. No es un error.\n\nUn 200 acá NO implica que la base esté cargada: durante dos semanas devolvió 200 con la base vacía."
+          }
+        }
+      ]
+    },
+    {
+      "name": "V1 (Sanctum)",
+      "item": [
+        {
+          "name": "Alojamientos",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/accommodations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "accommodations"]
+            },
+            "description": "Con la base cargada tiene que devolver 200 con 77 alojamientos."
+          }
+        },
+        {
+          "name": "Canales",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/channels",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "channels"]
+            }
+          }
+        },
+        {
+          "name": "Ciudades",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/cities",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "cities"]
+            }
+          }
+        },
+        {
+          "name": "Agencias",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agencies",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "agencies"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin V1 (user_type: platform)",
+      "description": "Requiere un usuario `platform`. El usuario de prueba lo es.",
+      "item": [
+        {
+          "name": "Alojamientos (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/v1/accommodations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "v1", "accommodations"]
+            },
+            "description": "Mismo endpoint que consumen el CRM y el panel de clientes. Devuelve distinta data según el `user_type` del token: un `client` queda acotado al pivot `accommodation_client`."
+          }
+        },
+        {
+          "name": "Cuentas",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/v1/accounts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "v1", "accounts"]
+            }
+          }
+        },
+        {
+          "name": "Usuarios",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/v1/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "v1", "users"]
+            }
+          }
+        },
+        {
+          "name": "Planes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/v1/plans",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "v1", "plans"]
+            },
+            "description": "Los planes son el catálogo de entitlements. La suscripción es por alojamiento (`accommodations.plan_id`), no por cuenta."
+          }
+        },
+        {
+          "name": "Provincias",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/v1/states",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "v1", "states"]
+            },
+            "description": "Filtra por país vía `config('api.catalog_country_iso')`. La tabla `states` tiene 4119 filas de ~246 países: sin ese filtro la lista es inservible."
+          }
+        }
+      ]
+    }
+  ]
+}

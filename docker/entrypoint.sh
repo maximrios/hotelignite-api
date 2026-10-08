@@ -9,7 +9,13 @@ set -e
 APP_DIR=/var/www
 cd "$APP_DIR"
 
-log() { echo "[entrypoint] $*"; }
+# A stderr, no a stdout. El bloque "one-off" de más abajo deja que
+# `run --rm api php artisan ...` escriba su salida limpia: con log() en stdout,
+# el `APP_KEY=$(... key:generate --show)` que documentan DEPLOY.md §2 y
+# .env.production.example se llevaba también la línea "[entrypoint] comando
+# puntual: ...". La key quedaba inválida y el contenedor arrancaba igual
+# —healthcheck en verde— hasta que algo intentaba desencriptar.
+log() { echo "[entrypoint] $*" >&2; }
 
 # --------------------------------------------------------------- storage
 # El volumen persistente monta sobre storage/. Docker precarga un volumen

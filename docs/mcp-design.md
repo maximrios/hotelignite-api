@@ -1,6 +1,10 @@
 # Diseño funcional — MCP para HotelIgnite API
 
-> Estado: **diseño** (sin implementar). Este documento define las herramientas
+> Estado: **Grupo A implementado en versión de solo lectura** (2026-10-01), ver
+> `docs/mcp-traveler-plan.md`: usa `client/v1` + API key (no Sanctum) y fechas
+> `Y-m-d` (no `d/m/Y`), a diferencia de lo que dice más abajo. El resto: diseño.
+>
+> Estado original: **diseño** (sin implementar). Este documento define las herramientas
 > MCP de alto nivel que expondrán la API a asistentes de IA. No es un wrapper
 > endpoint-por-endpoint: cada herramienta cubre un caso de uso completo.
 >

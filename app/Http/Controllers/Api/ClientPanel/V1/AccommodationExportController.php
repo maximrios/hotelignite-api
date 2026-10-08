@@ -69,7 +69,7 @@ class AccommodationExportController extends BaseController
             ->visibleTo($request->user())
             ->when(
                 $validated['search'] ?? null,
-                fn ($q, $search) => $q->where('name', 'like', "%{$search}%"),
+                fn ($q, $search) => $q->whereLike('name', "%{$search}%"),
             )
             ->when(
                 $request->has('enabled'),

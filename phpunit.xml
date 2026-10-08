@@ -18,14 +18,14 @@
             todas las tablas. Con datos reales en dev (77 alojamientos, 1356
             reservas), una sola corrida la destruye.
 
-            Hoy la suite entera usa DatabaseTransactions, porque el esquema
-            viene del dump legacy y `php artisan migrate` no corre desde cero
-            (ver docs/migrations-and-ci-plan.md). Alta de la base de tests:
-              mysqldump <db_dev> | mysql hotelignite_testing
+            La suite usa DatabaseTransactions sobre una copia de los datos de
+            dev. Desde el pase a Postgres (2026-10-08) `migrate` corre desde
+            cero; alta de la base de tests (ver docs/postgres-migration.md):
+              createdb hotelignite_testing
+              DB_DATABASE=hotelignite_testing php artisan migrate
+              DB_DATABASE=hotelignite_testing php artisan db:copy-from-mysql
         -->
     <env name="DB_DATABASE" value="hotelignite_testing"/>
-    <!-- sqlite en memoria no sirve todavía: hay migraciones con SQL crudo
-             de MySQL (DB::unprepared) que no corren en sqlite. -->
     <env name="MAIL_MAILER" value="array"/>
     <env name="QUEUE_CONNECTION" value="sync"/>
     <env name="SESSION_DRIVER" value="array"/>

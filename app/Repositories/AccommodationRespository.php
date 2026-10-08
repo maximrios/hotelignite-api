@@ -18,7 +18,7 @@ class AccommodationRespository implements AccommodationInterface
 {
     public function all(Request $request)
     {
-        //$request->city = ($request->city) ? $request->city:0;
+        // $request->city = ($request->city) ? $request->city:0;
         $limit = ($request->limit) ? $request->limit : 10;
         $offset = ($request->offset) ? $request->offset : 0;
         $type = ($request->type) ? $request->type : 0;
@@ -29,7 +29,7 @@ class AccommodationRespository implements AccommodationInterface
             })
             ->when($type, function ($q, $type) {
                 if ($type == 1) {
-                    //all stars types
+                    // all stars types
                     $hotelTypes = [1, 2, 3, 4, 5];
 
                     return $q->whereIn('type_id', $hotelTypes);
@@ -68,7 +68,7 @@ class AccommodationRespository implements AccommodationInterface
                 return $q->whereIn('type_id', $ids);
             })
             ->when($request->search, function ($q, $search) {
-                return $q->where('name', 'like', "%{$search}%");
+                return $q->whereLike('name', "%{$search}%");
             })
             ->when(! $request->has('show_all'), function ($q) {
                 return $q->where('enabled', 1);

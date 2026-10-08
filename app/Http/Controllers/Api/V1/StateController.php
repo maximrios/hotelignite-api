@@ -17,7 +17,7 @@ class StateController extends BaseController
     {
         $states = State::query()
             ->when($request->filled('country_id'), fn ($q) => $q->where('country_id', $request->query('country_id')))
-            ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', '%'.$request->query('search').'%'))
+            ->when($request->filled('search'), fn ($q) => $q->whereLike('name', '%'.$request->query('search').'%'))
             ->orderBy('name')
             ->get();
 

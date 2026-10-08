@@ -40,7 +40,7 @@ Todo lo de deploy vive en `api/docker/`:
 | Archivo | Qué es |
 |---|---|
 | `docker/docker-compose.traefik.yml` | Borde compartido del VPS (proyecto `edge`) |
-| `docker/.env.traefik.example` | Sus dos variables — copiar a `docker/.env.traefik` |
+| `docker/.env.traefik.example` | Sus variables — copiar a `docker/.env.traefik` |
 | `docker/docker-compose.prod.yml` | Stack de la API (proyecto `hotelignite-prod`) |
 | `docker/.env.production.example` | Plantilla de variables — copiar a `docker/.env.production` |
 | `docker/Dockerfile` | Imagen única: php-fpm 8.4 + nginx + supervisord |
@@ -60,10 +60,17 @@ Todo lo de deploy vive en `api/docker/`:
   en un segundo borde. Todo lo que se publique en este VPS entra por Traefik.
 - DNS apuntando al VPS **antes** de levantar (Let's Encrypt valida por TLS-ALPN):
   `api.tudominio.com` → IP del VPS.
-- La red compartida, una sola vez:
+- La red compartida y el archivo de certificados, una sola vez:
   ```bash
   docker network create edge
+  cd api/docker && touch acme.json && chmod 600 acme.json
   ```
+  **Los dos pasos importan y fallan callados.** `acme.json` es un bind mount de
+  un *archivo*: si no existe, Docker crea un **directorio** con ese nombre; y
+  con permisos distintos de `600` Traefik descarta el resolver
+  (`permissions 755 for /letsencrypt/acme.json are too open`). En los dos casos
+  el contenedor queda `Up` y sano, pero **todos los sitios sirven el certificado
+  self-signed de Traefik** y el browser muestra advertencia.
 
 ## 2. Configuración
 
@@ -71,11 +78,24 @@ Dos archivos, uno por stack:
 
 ```bash
 cd api/docker
-cp .env.traefik.example    .env.traefik        # ACME_EMAIL, nivel de log
+cp .env.traefik.example    .env.traefik        # ACME_EMAIL, DOMAIN, dashboard
 cp .env.production.example .env.production
-chmod 600 .env.production                      # tiene contraseñas; el otro no
-$EDITOR .env.production
+chmod 600 .env.traefik .env.production         # los dos llevan credenciales
+$EDITOR .env.traefik .env.production
 ```
+
+En `.env.traefik`: `ACME_EMAIL`, `DOMAIN` (el dashboard queda en
+`traefik.<DOMAIN>`) y `DASHBOARD_USERS`, en formato htpasswd:
+
+```bash
+docker run --rm httpd:alpine htpasswd -nbB admin 'una-password-larga'
+```
+
+**El hash va entre comillas simples.** Lleva `$`, y compose interpola variables
+también dentro del `.env`: sin escapar, `admin:$2y$05$Xk9p...` le llega a
+Traefik como `admin:$2y$05` —el resto se toma por una variable inexistente— y la
+password no anda sin que nada lo reporte. Verificado con compose v2.29.7.
+Duplicar cada `$` a `$$` también funciona; las comillas son menos frágiles.
 
 Mínimo a completar en `.env.production`:
 
@@ -94,6 +114,13 @@ Mínimo a completar en `.env.production`:
   ```
   (el entrypoint deja pasar de largo los comandos puntuales: no espera la base
   ni exige `APP_KEY` salvo cuando arranca el servicio)
+
+  La salida tiene que ser **una sola línea que empieza con `base64:`**. Hasta el
+  2026-09-22 el entrypoint logueaba a stdout y `APP_KEY=$(... --show)` se
+  llevaba también `[entrypoint] comando puntual: ...`; la key quedaba inválida y
+  el contenedor arrancaba igual, healthcheck en verde, hasta que algo intentaba
+  desencriptar. Ya está corregido —los logs del entrypoint van a stderr— pero si
+  ves algo más que la línea `base64:`, no la pegues.
 
 `DB_HOST` y `DB_PORT` los fija el compose apuntando al servicio `db`: **no** los
 pongas en el `.env.production`.
@@ -166,13 +193,29 @@ desarrollo). Pero eso te da el **esquema, no los datos**, así que para el prime
 deploy el camino sigue siendo importar un dump del entorno actual — incluida la
 tabla `migrations`, así las migraciones nuevas se aplican encima:
 
-```bash
-# en la máquina de desarrollo: el mismo script del backup diario
-cd api/docker && ./backup.sh          # deja el dump en /var/backups/hotelignite/daily
+`backup.sh` **no sirve para este paso**: exige `.env.production` y el
+contenedor `hi-db`, y en la máquina de desarrollo no hay ninguno de los dos
+(muere con `ERROR: falta .env.production`). Es el script del backup diario *del
+VPS*. Para sacar el dump de desarrollo, el contenedor se llama `db`:
 
-# copiar el .sql.gz al VPS y restaurar (el zcat ocurre en el host)
-zcat db-*.sql.gz | dcp exec -T db sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+```bash
+# en la máquina de desarrollo, desde la raíz del monorepo
+docker exec db sh -c 'mysqldump -uroot -p123456789 \
+    --single-transaction --routines --triggers --events \
+    --default-character-set=utf8mb4 hotelignite' | gzip > db-dev.sql.gz
+
+gzip -t db-dev.sql.gz && zcat db-dev.sql.gz | tail -1   # "Dump completed" = íntegro
 ```
+
+```bash
+# copiar el .sql.gz al VPS y restaurar (el zcat ocurre en el host)
+zcat db-dev.sql.gz | dcp exec -T db sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+```
+
+**Desarrollo corre MySQL 8.4 y producción 8.0**, así que el dump cruza de una
+serie mayor a una menor. Verificado el 2026-09-22: el dump de desarrollo importa
+limpio en `mysql:8.0.43` —75 tablas, 28 foreign keys, 80 filas en `migrations`,
+77 alojamientos, sin un solo warning—. No hace falta alinear las versiones.
 
 Con el esquema cargado se puede poner `RUN_MIGRATIONS=true` para que cada
 arranque aplique las migraciones nuevas, o correrlas a mano:
@@ -204,8 +247,13 @@ API_TAG=$(date +%Y%m%d-%H%M) dcp build && API_TAG=$(date +%Y%m%d-%H%M) dcp up -d
 
 ## 5. Backups
 
-Lo hace `docker/backup.sh`, parado en `api/docker/`. Toma la contraseña de
-`.env.production`, así que no hay credenciales en la línea de comandos:
+Lo hace `docker/backup.sh`, parado en `api/docker/`. Toma la contraseña del archivo de entorno,
+así que no hay credenciales en la línea de comandos.
+
+**Qué archivo de entorno lee:** prueba `.env.production` y, si no está, `.env`; `ENV_FILE=` fuerza
+uno. La doble opción no es cosmética: el VPS corre `docker/docker-compose.yml` con `env_file: .env`,
+y mientras el script exigió `.env.production` abortaba en la primera línea — por eso ese servidor
+estuvo sin un solo backup desde que se levantó.
 
 ```bash
 ./backup.sh          # dump + tar del volumen storage + rotación + offsite
@@ -268,10 +316,20 @@ dcp down                     # baja todo, conserva volúmenes
 
 Se sacaron del stack porque hoy la app no las usa. Si alguna hace falta:
 
-- **Dashboard de Traefik** — apagado con `--api.dashboard=false`. Para
-  encenderlo: volver a poner el flag en `true` en
-  `docker-compose.traefik.yml`, agregar el router `Host(...)` con
-  `service=api@internal` y protegerlo con un middleware `basicauth`.
+- **Restringir el dashboard por IP** — hoy está publicado en
+  `traefik.<DOMAIN>` detrás de basicauth y TLS, que es aceptable, pero expone el
+  mapa de routers y servicios de **todos** los proyectos del VPS. Con IP fija,
+  sumale un `ipallowlist` y encadenalo al router:
+  ```yaml
+  - traefik.http.middlewares.dashboard-ip.ipallowlist.sourcerange=TU.IP/32
+  - traefik.http.routers.traefik-dashboard.middlewares=dashboard-auth,dashboard-ip
+  ```
+- **TLS por defecto en el entrypoint** — con
+  `--entryPoints.websecure.http.tls.certresolver=le` cada router nuevo obtiene
+  certificado sin declararlo. No está puesto porque un router existente con
+  `tls=true` y sin resolver empezaría a pedir certificado real y fallaría si su
+  DNS no apunta al VPS — y Let's Encrypt limita a 5 emisiones por dominio por
+  semana.
 - **Los frontends** (`crm/`, `clients/`, `pms/`, TuriNorte) — van a **Vercel**,
   no a este VPS. Lo único que necesitan de acá es que la API sea pública por
   https y que sus dominios estén en `CORS_ALLOWED_ORIGINS`. Si algún día alguno
@@ -332,6 +390,8 @@ Se sacaron del stack porque hoy la app no las usa. Si alguna hace falta:
 |---|---|
 | `network edge declared as external, but could not be found` | Falta `docker network create edge`, o el borde nunca se levantó (§3) |
 | Traefik no emite certificado | DNS todavía no propagado, o el puerto 443 ocupado. `dce logs traefik` |
+| El browser muestra certificado inválido en **todos** los sitios | El resolver ACME se descartó al arrancar: `acme.json` quedó como directorio, o sin permisos `600`. `dce logs traefik \| grep -i acme` (§1) |
+| El dashboard rechaza la password correcta | El `$` del hash se comió la interpolación de compose. `DASHBOARD_USERS` va entre comillas simples en `.env.traefik` (§2) |
 | **404** en un dominio que debería andar | Traefik está vivo pero no encontró router: el contenedor no está en la red `edge`, le falta `traefik.enable=true`, o el `Host()` no coincide. `dce logs traefik \| grep -i error` |
 | `ERROR: APP_KEY vacío` | Falta `APP_KEY` en `.env.production` (ver §2) |
 | `MySQL no respondió en 60s` | El contenedor `db` no arranca: `dcp logs db`. Contraseña cambiada con el volumen ya inicializado → borrar el volumen o resetear la clave |

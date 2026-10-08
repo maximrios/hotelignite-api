@@ -47,7 +47,7 @@ class PolicyRepository implements PolicyInterface
             return $q->where('enabled', $request->enabled);
         })
             ->when($request->name, function ($q, $name) {
-                return $q->where('name', 'like', "%{$name}%");
+                return $q->whereLike('name', "%{$name}%");
             })
             ->orderBy('name')
             ->offset($offset)

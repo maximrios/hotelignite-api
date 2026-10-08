@@ -20,7 +20,7 @@ class ClientController extends BaseController
     public function index(Request $request)
     {
         $clients = Client::withCount('accommodations')
-            ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', "%{$request->query('search')}%"))
+            ->when($request->filled('search'), fn ($q) => $q->whereLike('name', "%{$request->query('search')}%"))
             ->when($request->has('active'), fn ($q) => $q->where('active', $request->boolean('active')))
             ->orderByDesc('id')
             ->paginate($request->integer('limit', 15));

@@ -31,20 +31,32 @@ BACKUP_RSYNC="${BACKUP_RSYNC:-}"
 log() { printf '[%s] %s\n' "$(date +%FT%T)" "$*"; }
 die() { printf '[%s] ERROR: %s\n' "$(date +%FT%T)" "$*" >&2; exit 1; }
 
-[[ -f .env.production ]] || die "falta .env.production (ver DEPLOY.md §2)"
+# El archivo de entorno no se llama igual en todas partes: el compose del repo
+# usa `.env.production`, pero el VPS corre `docker/docker-compose.yml` (untracked)
+# con `env_file: .env`. Hasta el 2026-09-22 este script exigía `.env.production`
+# y en el VPS moría en la primera línea — por eso el servidor nunca tuvo un solo
+# backup. Se acepta cualquiera de los dos, con `ENV_FILE` para forzarlo.
+ENV_FILE="${ENV_FILE:-}"
+if [[ -z "$ENV_FILE" ]]; then
+    for candidate in .env.production .env; do
+        [[ -f "$candidate" ]] && { ENV_FILE="$candidate"; break; }
+    done
+fi
+[[ -n "$ENV_FILE" && -f "$ENV_FILE" ]] \
+    || die "no encontré .env.production ni .env en $(pwd) (ver DEPLOY.md §2)"
 
 # `set -a` exporta lo que se lea; el subshell evita ensuciar el entorno del
 # resto del script con todas las variables de la app.
 load_env() {
     set -a
     # shellcheck disable=SC1091
-    source ./.env.production
+    source "./$ENV_FILE"
     set +a
 }
 load_env
 
-: "${DB_DATABASE:?falta DB_DATABASE en .env.production}"
-: "${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD en .env.production}"
+: "${DB_DATABASE:?falta DB_DATABASE en $ENV_FILE}"
+: "${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD en $ENV_FILE}"
 
 docker inspect "$DB_CONTAINER" >/dev/null 2>&1 || die "el contenedor $DB_CONTAINER no existe (¿el stack está levantado?)"
 

@@ -28,7 +28,7 @@ class CityController extends BaseController
         $cities = City::with('state')
             ->when(
                 $request->search,
-                fn ($q, $search) => $q->where('name', 'like', "%{$search}%")
+                fn ($q, $search) => $q->whereLike('name', "%{$search}%")
             )
             ->orderBy('name')
             ->limit($limit + 1)
@@ -38,7 +38,7 @@ class CityController extends BaseController
 
         return CityResource::collection($cities->take($limit))
             ->additional(['meta' => [
-                'limit'    => $limit,
+                'limit' => $limit,
                 'has_more' => $hasMore,
             ]]);
     }

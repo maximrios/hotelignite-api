@@ -1,6 +1,7 @@
 # Borde compartido del VPS: Traefik con TLS automático.
 #
-#   docker network create edge          # una sola vez, en el VPS
+#   touch acme.json && chmod 600 acme.json     # ver §"acme.json" más abajo
+#   docker network create edge                 # una sola vez
 #   docker compose --env-file .env.traefik -f docker-compose.traefik.yml up -d
 #
 # **Va aparte del stack de la API a propósito.** Los puertos 80 y 443 son únicos
@@ -16,59 +17,111 @@
 # in-flight, HSTS) van en el router de la API, no en el entrypoint. En el
 # entrypoint se aplicarían a **todos** los proyectos del VPS, y el rate limit de
 # una API JSON no es el que quiere un sitio con imágenes.
+#
+# ## acme.json
+#
+# Es un bind mount de un **archivo**, y eso tiene dos trampas que no fallan
+# ruidosamente:
+#
+#   1. Si el archivo no existe, Docker crea un **directorio** con ese nombre.
+#   2. Traefik exige permisos `600`; con cualquier otro descarta el resolver:
+#      "The ACME resolve is skipped from the resolvers list ... permissions 755
+#      for /letsencrypt/acme.json are too open".
+#
+# En los dos casos el contenedor queda `Up` y sano — lo que falla es que todos
+# los sitios sirven el certificado self-signed de Traefik y el browser muestra
+# advertencia. Por eso el `touch` + `chmod` va antes del primer `up`.
+#
+# El archivo es la única copia de los certificados. Let's Encrypt limita a 5
+# emisiones por dominio por semana: perderlo puede dejarte sin TLS por días.
 
 name: edge
 
 services:
   traefik:
-    image: traefik:v3.3
-    container_name: edge-traefik
+    image: traefik:v3.4
+    container_name: traefik
+    # `always` y no `unless-stopped`: si alguna vez se para a mano, con
+    # `unless-stopped` no vuelve después de un reboot — y eso deja sin ingreso a
+    # todos los proyectos del VPS, no sólo a éste.
     restart: always
+
     command:
-      - --global.sendAnonymousUsage=false
-      - --api.dashboard=false
-      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
-      - --accesslog=true
+      - --api.dashboard=true
+
+      # Providers
       - --providers.docker=true
       # Nada se publica solo: cada servicio pide su router con
       # `traefik.enable=true`. En un VPS compartido esto evita exponer sin
       # querer el contenedor que alguien levante para probar algo.
-      - --providers.docker.exposedByDefault=false
+      - --providers.docker.exposedbydefault=false
+      # A qué red mirar cuando un contenedor está en varias. La API está en
+      # `edge` y además en una red interna con MySQL y Redis; sin esto Traefik
+      # tiene que adivinar a qué IP rutear y aparecen 502 intermitentes.
       - --providers.docker.network=edge
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.web.http.redirections.entrypoint.permanent=true
-      - --entrypoints.websecure.address=:443
-      # El resolver es del borde porque el certificado lo emite el borde. Cada
-      # proyecto lo usa nombrándolo en su router; el almacenamiento es uno solo.
-      - --entrypoints.websecure.http.tls.certresolver=le
-      - --certificatesresolvers.le.acme.email=${ACME_EMAIL:?falta ACME_EMAIL}
-      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.le.acme.tlschallenge=true
+
+      # Entrypoints
+      - --entryPoints.web.address=:80
+      - --entryPoints.websecure.address=:443
+
+      # HTTP → HTTPS
+      - --entryPoints.web.http.redirections.entryPoint.to=websecure
+      - --entryPoints.web.http.redirections.entryPoint.scheme=https
+      - --entryPoints.web.http.redirections.entryPoint.permanent=true
+
+      # Let's Encrypt. El resolver es del borde porque el certificado lo emite
+      # el borde; cada proyecto lo usa nombrándolo en su router
+      # (`tls.certresolver=le`). El que se olvide de esa label sirve
+      # self-signed sin error visible.
+      - --certificatesResolvers.le.acme.email=${ACME_EMAIL:?falta ACME_EMAIL}
+      - --certificatesResolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesResolvers.le.acme.tlsChallenge=true
+
+      # Logs
+      - --log.level=WARN
+      - --accessLog=true
+
     ports:
       - "80:80"
       - "443:443"
+
     volumes:
-      # Lectura del socket para descubrir contenedores. Sigue siendo la pieza
-      # más sensible del stack: quien comprometa Traefik puede enumerar y, en
-      # varias versiones, escalar a root en el host. La alternativa es
-      # `tecnativa/docker-socket-proxy` exponiendo sólo `CONTAINERS=1`.
+      # Lectura del socket para descubrir contenedores. Es la pieza más
+      # sensible del stack: quien comprometa Traefik puede enumerar y, en varias
+      # versiones, escalar a root en el host — y ahora ve todos los proyectos
+      # del VPS, no uno. La alternativa es `tecnativa/docker-socket-proxy`
+      # exponiendo sólo `CONTAINERS=1`.
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      # Los certificados viven acá y sobreviven a cualquier `down` de los
-      # proyectos. Let's Encrypt limita a 5 emisiones por dominio por semana:
-      # borrar este volumen por accidente puede dejarte sin TLS por días.
-      - traefik_acme:/letsencrypt
+      - ./acme.json:/letsencrypt/acme.json
+
     networks:
       - edge
+
+    # `--accessLog=true` con el driver json-file por defecto crece sin techo. El
+    # access log de una API pública llena el disco, y con el disco lleno se cae
+    # el VPS entero, no sólo Traefik.
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "5"
 
-volumes:
-  traefik_acme:
+    labels:
+      - traefik.enable=true
+
+      # Dashboard
+      - traefik.http.routers.traefik-dashboard.rule=Host(`traefik.${DOMAIN:?falta DOMAIN}`)
+      - traefik.http.routers.traefik-dashboard.entrypoints=websecure
+      - traefik.http.routers.traefik-dashboard.tls=true
+      - traefik.http.routers.traefik-dashboard.tls.certresolver=le
+      - traefik.http.routers.traefik-dashboard.service=api@internal
+      - traefik.http.routers.traefik-dashboard.middlewares=dashboard-auth
+
+      # Basic Auth. El hash de bcrypt lleva `$`, y compose interpola variables
+      # también **dentro del .env**: sin escapar, el hash llega truncado a
+      # Traefik y la password no anda sin que nada lo reporte. En
+      # `.env.traefik` va entre comillas simples. Ver ahí el detalle.
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${DASHBOARD_USERS:?falta DASHBOARD_USERS}"
 
 networks:
   edge:

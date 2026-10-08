@@ -16,7 +16,7 @@ class CityRepository implements CityInterface
     {
         $limit = $request->limit ?? 20;
 
-        $cities = City::when($request->search, fn ($q, $search) => $q->where('name', 'like', "%{$search}%"))
+        $cities = City::when($request->search, fn ($q, $search) => $q->whereLike('name', "%{$search}%"))
             ->orderBy('name')
             ->limit($limit)
             ->get();

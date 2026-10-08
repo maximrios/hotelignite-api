@@ -41,13 +41,15 @@ class AccountController extends BaseController
         $accounts = Account::with(['plan', 'accountType'])
             ->withCount(['accommodations', 'users'])
             ->when($request->filled('search'), fn ($q) => $q->where(
-                fn ($sub) => $sub->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
+                fn ($sub) => $sub->whereLike('name', "%{$search}%")
+                    ->orWhereLike('email', "%{$search}%")
             ))
             ->when($request->filled('account_type_id'), fn ($q) => $q->where('account_type_id', $request->integer('account_type_id')))
             ->when($request->filled('plan_id'), fn ($q) => $q->where('plan_id', $request->integer('plan_id')))
             ->when($request->has('active'), fn ($q) => $q->where('active', $request->boolean('active')))
             ->orderBy('name')
+            // Desempate: sin un orden total, las páginas pueden repetir o saltear filas.
+            ->orderBy('id')
             ->paginate($request->integer('limit', 15));
 
         return AccountResource::collection($accounts);

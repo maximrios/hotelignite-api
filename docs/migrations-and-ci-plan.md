@@ -1,5 +1,9 @@
 # Prerequisito: migraciones reproducibles + CI
 
+> **Superado (2026-10-08):** las migraciones se reescribieron como esquema base
+> para Postgres y `migrate` corre desde cero. Ver `docs/postgres-migration.md`.
+> Lo de abajo describe el estado anterior, sobre MySQL.
+
 Este es el trabajo que va **antes** del upgrade de Laravel y antes de cualquier
 otro punto de `docs/production-readiness.md`. No porque sea lo más urgente en
 riesgo, sino porque es lo que hace que todo lo demás sea verificable: sin una

@@ -23,7 +23,7 @@ class CatalogController extends BaseController
     public function cities(Request $request)
     {
         $cities = City::query()
-            ->when($request->filled('search'), fn ($q) => $q->where('name', 'like', "%{$request->query('search')}%"))
+            ->when($request->filled('search'), fn ($q) => $q->whereLike('name', "%{$request->query('search')}%"))
             ->with('images')
             ->orderBy('name')
             ->limit((int) ($request->limit ?: 50))

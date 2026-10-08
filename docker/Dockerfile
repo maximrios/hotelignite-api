@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nginx \
         supervisor \
         default-mysql-client \
+        postgresql-client \
+        libpq-dev \
         libzip-dev \
         libpng-dev \
         libjpeg62-turbo-dev \
@@ -27,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         curl \
         unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j"$(nproc)" bcmath exif gd opcache pcntl pdo_mysql zip \
+    && docker-php-ext-install -j"$(nproc)" bcmath exif gd opcache pcntl pdo_mysql pdo_pgsql zip \
     && rm -f /etc/nginx/sites-enabled/default \
     && ln -sf /dev/stdout /var/log/nginx/access.log \
     && ln -sf /dev/stderr /var/log/nginx/error.log \
