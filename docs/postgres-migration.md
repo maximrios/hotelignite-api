@@ -1,20 +1,33 @@
 # Pase de MySQL a PostgreSQL 17
 
-Estado al 2026-10-08: **dev y producción corren sobre Postgres 17.**
+Estado al 2026-10-08: **dev y producción corren sobre Postgres 17. MySQL ya no
+existe en ningún entorno**: contenedores y volúmenes eliminados ese mismo día.
+Quedan dumps finales: `~/backups/hotelignite-mysql-local-final-*.sql.gz` en la
+máquina de dev y `~/backups/daily/db-2026-10-08-1258.sql.gz` en el VPS.
+
+## Extensiones
+
+Imagen `postgis/postgis:17-3.6-alpine` en dev y en el VPS (es `postgres:17-alpine`
+más PostGIS; mismo datadir, misma versión de ICU). La migración
+`2026_10_08_000010_enable_unaccent_and_postgis_extensions` crea:
+
+- `unaccent` (contrib): `unaccent('Embarcación')` → `Embarcacion`.
+- `postgis` 3.6: tipos `geometry`/`geography` y funciones `ST_*`. Crea la tabla
+  `spatial_ref_sys`, que Laravel ya excluye de `db:wipe`.
+
+Habilitarlas no cambia ninguna búsqueda todavía (ver Pendiente).
 
 ## Cutover de producción (2026-10-08, hecho)
 
 - Servicio `pgsql` → contenedor `hi-pgsql` (`postgres:17-alpine`, ICU es-AR,
   `shared_buffers=64MB`, `max_connections=40`), volumen `hotelignite-prod_pg_data`.
 - `DB_CONNECTION: pgsql` lo fija el `environment:` del compose (pisa al `.env`).
-- MySQL (`hi-db`) **apagado**: detrás del profile `mysql-legacy`, con
-  `restart=no`. Volumen `hotelignite-prod_db_data` intacto.
+- MySQL (`hi-db`) eliminado junto con el volumen `hotelignite-prod_db_data`.
 - Backups previos en `~/backups/` del VPS: dump MySQL verificado (`daily/db-2026-10-08-1258.sql.gz`)
   y dump Postgres post-cutover (`pgsql-postcutover-2026-10-08-1314.sql.gz`).
 - Copia: 68 tablas, 15.081 filas, todos los conteos iguales.
-- Rollback: imagen `hotelignite/api:pre-pgsql`, `docker-compose.yml.bak-2026-10-08-premysql`
-  y `.env.bak-2026-10-08-premysql` en `docker/`. Volver a MySQL pierde lo
-  escrito después del cutover.
+- Ya no hay rollback a MySQL en caliente: volver exigiría restaurar el dump
+  MySQL en un contenedor nuevo y perder lo escrito después del cutover.
 
 ## Qué cambió
 
@@ -69,24 +82,18 @@ Decisiones de traducción (también documentadas en el docblock de la 000001):
 
 ### Infra de dev
 
-- `docker-compose.yml`: servicio `pgsql` (`postgres:17-alpine`, puerto host 5433,
+- `docker-compose.yml`: servicio `pgsql` (`postgis/postgis:17-3.6-alpine`, puerto host 5433,
   datadir `docker-pgsql/data`) inicializado con collation ICU `es-AR`. Sin eso,
   la imagen alpine ordena por bytes y `ORDER BY name` difiere de MySQL.
 - `docker-api/Dockerfile` y `docker/Dockerfile` instalan `pdo_pgsql`. La de prod
   también trae `postgresql-client`.
-- `config/database.php`: conexión `mysql_source` (variables `MYSQL_SOURCE_*`),
-  que es el origen de la copia.
 
-## Copiar los datos
+## Copia de los datos (histórico)
 
-```bash
-php artisan migrate                      # sobre la base Postgres vacía
-php artisan db:copy-from-mysql           # --truncate si ya tiene datos
-```
-
-El comando copia en orden de FKs, pasa las fechas cero a NULL y los 0/1 a
-boolean, mueve las secuencias al máximo `id` y al final compara conteos tabla
-por tabla. Si algún conteo no coincide, sale con error.
+La hizo `php artisan db:copy-from-mysql`, un comando de un solo uso que se
+eliminó junto con MySQL (está en el historial de git, commit `b0aafcf`). Copiaba
+en orden de FKs, pasaba las fechas cero a NULL y los 0/1 a boolean, movía las
+secuencias al máximo `id` y comparaba conteos tabla por tabla.
 
 En dev se copiaron 68 tablas y 15.114 filas. Comprobaciones hechas:
 
@@ -95,25 +102,26 @@ En dev se copiaron 68 tablas y 15.114 filas. Comprobaciones hechas:
 - la suite (87 tests) pasa en Postgres y en MySQL;
 - 7 respuestas de la API comparadas en los dos motores: JSON idéntico byte a byte.
 
-Para volver atrás en dev: en `api/.env` poner `DB_CONNECTION=mysql`, `DB_HOST=db`,
-`DB_PORT=3306` y `DB_USERNAME=root`. El contenedor `db` sigue arriba, pero no
-recibe lo que se escribió después del pase.
 
 ## Pendiente
 
 1. **Búsquedas sin acentos.** `whereLike` ya ignora mayúsculas, pero no acentos:
-   "embarcacion" no encuentra "Embarcación", y en MySQL (`*_ci`) sí. Se resuelve
-   con la extensión `unaccent`, o con `pg_trgm` + `unaccent` si además se quiere
-   búsqueda difusa.
-2. **`.env` del VPS**: dice todavía `DB_CONNECTION=mysql`. La app no lo usa (lo
+   "embarcacion" no encuentra "Embarcación", y en MySQL (`*_ci`) sí. La extensión
+   `unaccent` ya está; falta usarla en las búsquedas (`unaccent(col) ILIKE
+   unaccent(?)`), idealmente con un índice de expresión, o sumar `pg_trgm` si
+   además se quiere búsqueda difusa.
+2. **Geolocalización.** PostGIS está instalado, pero `accommodations.latitude` y
+   `longitude` siguen siendo varchar con default `'0'`. Falta una columna
+   `geography(Point, 4326)` con índice GiST para búsquedas por distancia.
+3. **`.env` del VPS**: dice todavía `DB_CONNECTION=mysql`. La app no lo usa (lo
    pisa el compose), pero `backup.sh` sí: hasta cambiarlo a `pgsql` el script
    intenta respaldar `hi-db`, que está apagado. El guard bloquea editarlo desde
    el agente; hay que hacerlo a mano. Después, cron de `backup.sh` con destino offsite.
-3. **FKs sobre `accommodation_id` / `account_id`.** El motivo para no tenerlas
+4. **FKs sobre `accommodation_id` / `account_id`.** El motivo para no tenerlas
    (signed vs unsigned) ya no existe en Postgres. Para agregarlas antes hay que
    limpiar huérfanos: por ejemplo, 37 filas de `reservation_rooms` apuntan a
    reservas que no existen.
-4. **Tablas legacy** (`009_create_legacy_pms_tables`): se copiaron para no
+5. **Tablas legacy** (`009_create_legacy_pms_tables`): se copiaron para no
    perder histórico. Archivarlas y dropearlas en una ventana aparte.
-5. Una vez hecho el cutover: borrar `mysql_source`, el comando de copia y
-   `database/migrations-mysql-legacy/`.
+6. `database/migrations-mysql-legacy/` se puede borrar cuando ya no sirva como
+   referencia; no se ejecuta.

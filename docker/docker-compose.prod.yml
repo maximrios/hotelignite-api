@@ -4,7 +4,7 @@
 #   cp .env.production.example .env.production && chmod 600 .env.production
 #   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 #
-# Tres servicios: MySQL, Redis (cache + rate limiter) y el API (nginx + php-fpm
+# Tres servicios: Postgres, Redis (cache + rate limiter) y el API (nginx + php-fpm
 # + worker de colas + scheduler, todos bajo supervisord en el mismo contenedor —
 # ver docker/supervisord.conf).
 #
@@ -37,8 +37,11 @@ services:
   # Parámetros chicos a propósito: el droplet tiene 957 MB y la base ronda los
   # 30 MB. `max_connections` cubre php-fpm + worker + scheduler con margen.
   # ICU es-AR: orden alfabético en español; sólo aplica al crear el volumen.
+  # Imagen postgis/postgis (= postgres:17-alpine + PostGIS): las extensiones
+  # postgis y unaccent las crea la migración 2026_10_08_000010. MySQL se
+  # eliminó el 2026-10-08, con su volumen.
   pgsql:
-    image: postgres:17-alpine
+    image: postgis/postgis:17-3.6-alpine
     container_name: hi-pgsql
     restart: always
     command:
@@ -71,44 +74,12 @@ services:
       start_period: 20s
     logging: *logging
 
-  # ----------------------------------------------------------- MySQL (legacy)
-  # Apagado desde el pase a Postgres (2026-10-08). Se conserva el volumen y la
-  # definición para volver atrás o re-copiar:
-  #   docker compose --profile mysql-legacy up -d db
-  db:
-    profiles: ["mysql-legacy"]
-    image: mysql:8.0
-    container_name: hi-db
-    restart: always
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --max_connections=250
-      - --innodb-buffer-pool-size=${MYSQL_BUFFER_POOL:-512M}
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?falta DB_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${DB_DATABASE:?falta DB_DATABASE}
-      MYSQL_USER: ${DB_USERNAME:?falta DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD}
-      TZ: ${APP_TIMEZONE:-America/Argentina/Salta}
-    volumes:
-      - db_data:/var/lib/mysql
-    networks:
-      - internal
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${DB_ROOT_PASSWORD}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
-    logging: *logging
-
   # ----------------------------------------------------------- Redis
   # Store del cache y, con él, del rate limiter de Laravel. Sobre archivos cada
   # chequeo del limiter era lectura + escritura + lock en disco; acá es atómico.
   #
   # `allkeys-lru` es correcto para cache puro. Las colas NO van acá justamente
-  # por eso —evictaría jobs pendientes—: corren sobre MySQL
+  # por eso —evictaría jobs pendientes—: corren sobre Postgres
   # (`QUEUE_CONNECTION=database`). Si algún día se mudan a Redis, levantar una
   # segunda instancia con `noeviction`.
   redis:
@@ -200,7 +171,6 @@ services:
       - traefik.http.middlewares.hi-inflight.inflightreq.amount=${INFLIGHT_AMOUNT:-15}
 
 volumes:
-  db_data:
   pg_data:
   storage:
 
@@ -213,8 +183,8 @@ networks:
     name: edge
     external: true
 
-  # Red privada: sólo api ↔ MySQL ↔ Redis. `internal: true` la deja sin salida a
-  # internet, y MySQL no publica puertos al host. Para un cliente SQL, túnel SSH.
+  # Red privada: sólo api ↔ Postgres ↔ Redis. `internal: true` la deja sin salida a
+  # internet, y Postgres no publica puertos al host. Para un cliente SQL, túnel SSH.
   internal:
     name: hotelignite_internal
     internal: true

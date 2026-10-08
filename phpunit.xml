@@ -19,11 +19,9 @@
             reservas), una sola corrida la destruye.
 
             La suite usa DatabaseTransactions sobre una copia de los datos de
-            dev. Desde el pase a Postgres (2026-10-08) `migrate` corre desde
-            cero; alta de la base de tests (ver docs/postgres-migration.md):
-              createdb hotelignite_testing
-              DB_DATABASE=hotelignite_testing php artisan migrate
-              DB_DATABASE=hotelignite_testing php artisan db:copy-from-mysql
+            dev. Alta de la base de tests (contenedor `pgsql` de dev):
+              docker exec pgsql createdb -U hotelignite hotelignite_testing
+              docker exec pgsql sh -c 'pg_dump -U hotelignite hotelignite | psql -qU hotelignite hotelignite_testing'
         -->
     <env name="DB_DATABASE" value="hotelignite_testing"/>
     <env name="MAIL_MAILER" value="array"/>
