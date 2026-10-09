@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Repositories;
 
 use App\Http\Requests\Admin\SearchPointOfInterestRequest;
-use App\Http\Requests\Admin\StorePointOfInterestRequest;
-use App\Http\Requests\Admin\UpdatePointOfInterestRequest;
 use App\Http\Resources\Admin\PoiCategoryResource;
 use App\Http\Resources\Admin\PointOfInterestResource;
 use App\Http\Resources\Admin\PointOfInterestResourceCollection;
@@ -37,12 +35,13 @@ class PointOfInterestRepository implements PointOfInterestInterface
     /** Sólo se informa el tiempo a pie por debajo de esto. */
     private const WALK_MAX_M = 1500;
 
-    public function search(SearchPointOfInterestRequest $request): PointOfInterestResourceCollection
+    public function search(SearchPointOfInterestRequest $request, ?int $ownerClientId = null): PointOfInterestResourceCollection
     {
         $perPage = min($request->integer('per_page', 20), 100);
 
         $points = PointOfInterest::query()
-            ->with(['city.state', 'category.parent'])
+            ->with(['city.state', 'category.parent', 'client'])
+            ->when($ownerClientId !== null, fn ($q) => $q->ownedByClient($ownerClientId))
             ->when($request->filled('city_id'), fn ($q) => $q->where('city_id', $request->integer('city_id')))
             ->when($request->filled('category_id'), function ($q) use ($request) {
                 $id = $request->integer('category_id');
@@ -69,18 +68,20 @@ class PointOfInterestRepository implements PointOfInterestInterface
         return new PointOfInterestResourceCollection($points);
     }
 
-    public function store(StorePointOfInterestRequest $request): PointOfInterestResource
+    public function store(array $data, ?int $clientId = null): PointOfInterestResource
     {
-        $poi = PointOfInterest::create($request->validated());
+        $poi = new PointOfInterest($data);
+        $poi->client_id = $clientId;
+        $poi->save();
 
-        return new PointOfInterestResource($poi->load(['city.state', 'category.parent']));
+        return new PointOfInterestResource($poi->load(['city.state', 'category.parent', 'client']));
     }
 
-    public function update(PointOfInterest $poi, UpdatePointOfInterestRequest $request): PointOfInterestResource
+    public function update(PointOfInterest $poi, array $data): PointOfInterestResource
     {
-        $poi->update($request->validated());
+        $poi->update($data);
 
-        return new PointOfInterestResource($poi->fresh()->load(['city.state', 'category.parent']));
+        return new PointOfInterestResource($poi->fresh()->load(['city.state', 'category.parent', 'client']));
     }
 
     public function remove(PointOfInterest $poi): void

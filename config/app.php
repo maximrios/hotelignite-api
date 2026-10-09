@@ -73,6 +73,13 @@ return [
     'timezone' => 'UTC',
 
     /*
+    | Zona horaria del destino, para resolver "hoy" en la agenda de eventos: las
+    | fechas de `events` son locales (date + time), no instantes UTC. Ver
+    | docs/events-plan.md.
+    */
+    'destination_timezone' => env('APP_DESTINATION_TIMEZONE', 'America/Argentina/Salta'),
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

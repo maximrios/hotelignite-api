@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\Admin\V1\AccommodationChannelController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationDocumentController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationImageController;
+use App\Http\Controllers\Api\Admin\V1\AccommodationNearbyEventController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationNearbyPointController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationServiceController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationTypeController;
@@ -14,6 +15,9 @@ use App\Http\Controllers\Api\Admin\V1\CityController;
 use App\Http\Controllers\Api\Admin\V1\ClientApiKeyController;
 use App\Http\Controllers\Api\Admin\V1\ClientController;
 use App\Http\Controllers\Api\Admin\V1\DocumentTypeController;
+use App\Http\Controllers\Api\Admin\V1\EventCategoryController;
+use App\Http\Controllers\Api\Admin\V1\EventController;
+use App\Http\Controllers\Api\Admin\V1\EventMediaController;
 use App\Http\Controllers\Api\Admin\V1\PlanController as AdminPlanController;
 use App\Http\Controllers\Api\Admin\V1\PoiCategoryController;
 use App\Http\Controllers\Api\Admin\V1\PointOfInterestController;
@@ -23,7 +27,9 @@ use App\Http\Controllers\Api\Admin\V1\UserController;
 use App\Http\Controllers\Api\ClientPanel\V1\AccommodationExportController;
 use App\Http\Controllers\Api\ClientPanel\V1\AssociateController;
 use App\Http\Controllers\Api\ClientPanel\V1\DocumentController as ClientPanelDocumentController;
+use App\Http\Controllers\Api\ClientPanel\V1\EventController as ClientPanelEventController;
 use App\Http\Controllers\Api\ClientPanel\V1\InvitationController as ClientPanelInvitationController;
+use App\Http\Controllers\Api\ClientPanel\V1\PointOfInterestController as ClientPanelPointOfInterestController;
 use App\Http\Controllers\Api\Invitations\PublicInvitationController;
 use App\Http\Controllers\Api\V1\AccommodationAvailabilityController;
 use App\Http\Controllers\Api\V1\AccommodationController as WebAccommodationController;
@@ -114,6 +120,26 @@ Route::middleware(['auth:sanctum', 'client.user'])->prefix('client-panel/v1')->g
         ->middleware('throttle:api')->name('client-panel.documents.index');
     Route::get('associates/{accommodation}/documents/{document}/download', [ClientPanelDocumentController::class, 'download'])
         ->middleware('throttle:api')->name('client-panel.documents.download');
+
+    // Contenido turístico que carga el client (docs/events-plan.md): lista y
+    // edita lo propio; leer el catálogo completo es por admin/v1. Puede cargar
+    // en cualquier ciudad (la jurisdicción es fase 2).
+    Route::middleware('throttle:api')->group(function () {
+        Route::get('points-of-interest', [ClientPanelPointOfInterestController::class, 'index'])->name('client-panel.points-of-interest.index');
+        Route::post('points-of-interest', [ClientPanelPointOfInterestController::class, 'store'])->name('client-panel.points-of-interest.store');
+        Route::get('points-of-interest/{poi}', [ClientPanelPointOfInterestController::class, 'show'])->name('client-panel.points-of-interest.show');
+        Route::match(['put', 'patch'], 'points-of-interest/{poi}', [ClientPanelPointOfInterestController::class, 'update'])->name('client-panel.points-of-interest.update');
+        Route::delete('points-of-interest/{poi}', [ClientPanelPointOfInterestController::class, 'destroy'])->name('client-panel.points-of-interest.destroy');
+
+        Route::get('events', [ClientPanelEventController::class, 'index'])->name('client-panel.events.index');
+        Route::post('events', [ClientPanelEventController::class, 'store'])->name('client-panel.events.store');
+        Route::get('events/{event}', [ClientPanelEventController::class, 'show'])->name('client-panel.events.show');
+        Route::match(['put', 'patch'], 'events/{event}', [ClientPanelEventController::class, 'update'])->name('client-panel.events.update');
+        Route::delete('events/{event}', [ClientPanelEventController::class, 'destroy'])->name('client-panel.events.destroy');
+        Route::post('events/{event}/media', [EventMediaController::class, 'store'])->name('client-panel.events.media.store');
+        Route::patch('events/{event}/media/reorder', [EventMediaController::class, 'reorder'])->name('client-panel.events.media.reorder');
+        Route::delete('events/{event}/media/{media}', [EventMediaController::class, 'destroy'])->name('client-panel.events.media.destroy');
+    });
 });
 
 Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(function () {
@@ -151,6 +177,15 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::get('points-of-interest/{poi}', [PointOfInterestController::class, 'show'])->name('admin.points-of-interest.show');
             Route::get('accommodations/{accommodation}/nearby-points', [AccommodationNearbyPointController::class, 'index'])
                 ->name('admin.accommodations.nearby-points.index');
+
+            // Agenda de eventos (docs/events-plan.md). Misma regla: lectura
+            // abierta, escritura del staff en `platform` (y del client en
+            // client-panel/v1).
+            Route::get('event-categories', [EventCategoryController::class, 'index'])->name('admin.event-categories.index');
+            Route::get('events', [EventController::class, 'index'])->name('admin.events.index');
+            Route::get('events/{event}', [EventController::class, 'show'])->name('admin.events.show');
+            Route::get('accommodations/{accommodation}/nearby-events', [AccommodationNearbyEventController::class, 'index'])
+                ->name('admin.accommodations.nearby-events.index');
 
             Route::get('accommodation-types', [AccommodationTypeController::class, 'index'])->name('admin.accommodation-types.index');
             Route::get('accommodation-types/{type}', [AccommodationTypeController::class, 'show'])->name('admin.accommodation-types.show');
@@ -246,6 +281,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
                     ->name('admin.points-of-interest.update');
                 Route::delete('points-of-interest/{poi}', [PointOfInterestController::class, 'destroy'])
                     ->name('admin.points-of-interest.destroy');
+
+                Route::post('events', [EventController::class, 'store'])->name('admin.events.store');
+                Route::match(['put', 'patch'], 'events/{event}', [EventController::class, 'update'])->name('admin.events.update');
+                Route::delete('events/{event}', [EventController::class, 'destroy'])->name('admin.events.destroy');
+                Route::post('events/{event}/media', [EventMediaController::class, 'store'])->name('admin.events.media.store');
+                Route::patch('events/{event}/media/reorder', [EventMediaController::class, 'reorder'])->name('admin.events.media.reorder');
+                Route::delete('events/{event}/media/{media}', [EventMediaController::class, 'destroy'])->name('admin.events.media.destroy');
             });
         });
     });

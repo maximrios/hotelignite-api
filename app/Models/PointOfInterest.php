@@ -2,10 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasUniqueSlug;
+use App\Models\Concerns\OwnedByClient;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
 /**
  * Punto de interés del catálogo global (docs/points-of-interest-plan.md).
@@ -16,6 +17,8 @@ use Illuminate\Support\Str;
  */
 class PointOfInterest extends Model
 {
+    use HasUniqueSlug;
+    use OwnedByClient;
     use SoftDeletes;
 
     protected $table = 'points_of_interest';
@@ -53,43 +56,16 @@ class PointOfInterest extends Model
     protected $casts = [
         'city_id' => 'integer',
         'poi_category_id' => 'integer',
+        'client_id' => 'integer',
         'latitude' => 'float',
         'longitude' => 'float',
         'is_featured' => 'boolean',
         'enabled' => 'boolean',
     ];
 
-    /**
-     * Slug único desde el nombre cuando falta. Igual que en Accommodation, no se
-     * regenera si el nombre cambia: los links no se rompen.
-     */
-    protected static function booted(): void
+    protected static function slugFallback(): string
     {
-        static::saving(function (PointOfInterest $poi) {
-            if (empty($poi->slug) && ! empty($poi->name)) {
-                $poi->slug = static::generateUniqueSlug($poi->name, $poi->id);
-            }
-        });
-    }
-
-    protected static function generateUniqueSlug(string $name, ?int $ignoreId = null): string
-    {
-        $base = Str::slug($name) ?: 'punto';
-        $slug = $base;
-        $suffix = 2;
-
-        // withTrashed: el índice único también cubre las filas dadas de baja.
-        while (
-            static::withTrashed()
-                ->where('slug', $slug)
-                ->when($ignoreId, fn ($query) => $query->where('id', '!=', $ignoreId))
-                ->exists()
-        ) {
-            $slug = "{$base}-{$suffix}";
-            $suffix++;
-        }
-
-        return $slug;
+        return 'punto';
     }
 
     /** @return BelongsTo<City, $this> */

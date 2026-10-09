@@ -39,6 +39,8 @@ use App\Repositories\Contracts\RoomTypeBedInterface;
 use App\Repositories\Contracts\RoomTypeDescriptionInterface;
 use App\Repositories\Contracts\RoomTypeInterface;
 use App\Repositories\Contracts\RoomTypeServiceInterface;
+use App\Repositories\Contracts\EventInterface;
+use App\Repositories\Contracts\MediaInterface;
 use App\Repositories\Contracts\PoiCategoryInterface;
 use App\Repositories\Contracts\PointOfInterestInterface;
 use App\Repositories\Contracts\ServiceInterface;
@@ -47,6 +49,8 @@ use App\Repositories\Contracts\TravelAgencyInterface;
 use App\Repositories\DocumentRepository;
 use App\Repositories\InquiryRepository;
 use App\Repositories\InvitationRepository;
+use App\Repositories\EventRepository;
+use App\Repositories\MediaRepository;
 use App\Repositories\PoiCategoryRepository;
 use App\Repositories\PointOfInterestRepository;
 use App\Repositories\PolicyRepository;
@@ -75,6 +79,8 @@ class RepositoryServiceProvider extends ServiceProvider
     {
         $this->app->bind(AccommodationInterface::class, AccommodationRespository::class);
         $this->app->bind(PoiCategoryInterface::class, PoiCategoryRepository::class);
+        $this->app->bind(EventInterface::class, EventRepository::class);
+        $this->app->bind(MediaInterface::class, MediaRepository::class);
         $this->app->bind(PointOfInterestInterface::class, PointOfInterestRepository::class);
         $this->app->bind(AccommodationTypeInterface::class, AccommodationTypeRepository::class);
         $this->app->bind(TravelAgencyInterface::class, TravelAgencyRespository::class);

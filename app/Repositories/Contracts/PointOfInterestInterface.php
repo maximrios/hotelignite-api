@@ -5,8 +5,6 @@ declare(strict_types=1);
 namespace App\Repositories\Contracts;
 
 use App\Http\Requests\Admin\SearchPointOfInterestRequest;
-use App\Http\Requests\Admin\StorePointOfInterestRequest;
-use App\Http\Requests\Admin\UpdatePointOfInterestRequest;
 use App\Http\Resources\Admin\PoiCategoryResource;
 use App\Http\Resources\Admin\PointOfInterestResource;
 use App\Http\Resources\Admin\PointOfInterestResourceCollection;
@@ -15,11 +13,17 @@ use App\Models\PointOfInterest;
 
 interface PointOfInterestInterface
 {
-    public function search(SearchPointOfInterestRequest $request): PointOfInterestResourceCollection;
+    /** `$ownerClientId`: sólo los cargados por ese client (el listado del portal). */
+    public function search(SearchPointOfInterestRequest $request, ?int $ownerClientId = null): PointOfInterestResourceCollection;
 
-    public function store(StorePointOfInterestRequest $request): PointOfInterestResource;
+    /**
+     * @param  array<string, mixed>  $data  ya validado
+     * @param  int|null  $clientId  quién lo carga; null = staff
+     */
+    public function store(array $data, ?int $clientId = null): PointOfInterestResource;
 
-    public function update(PointOfInterest $poi, UpdatePointOfInterestRequest $request): PointOfInterestResource;
+    /** @param  array<string, mixed>  $data  ya validado */
+    public function update(PointOfInterest $poi, array $data): PointOfInterestResource;
 
     public function remove(PointOfInterest $poi): void;
 

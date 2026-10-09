@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             DocumentTypeSeeder::class,
             ClientDocumentRequirementSeeder::class,
             PoiCategorySeeder::class,
+            EventCategorySeeder::class,
         ]);
     }
 }

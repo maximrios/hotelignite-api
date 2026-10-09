@@ -33,6 +33,11 @@ class PointOfInterestResource extends JsonResource
             'external_id' => $this->external_id,
             'city_id' => $this->city_id,
             'poi_category_id' => $this->poi_category_id,
+            'client_id' => $this->client_id,
+            // Quién lo cargó: null = staff. Lo muestra el CRM ("Cargado por").
+            'client' => $this->whenLoaded('client', fn () => $this->client
+                ? ['id' => $this->client->id, 'name' => $this->client->name]
+                : null),
             'city' => new CityResource($this->whenLoaded('city')),
             'category' => new PoiCategoryResource($this->whenLoaded('category')),
             'distance_m' => $this->when(
