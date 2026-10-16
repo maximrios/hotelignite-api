@@ -260,7 +260,7 @@ class AccommodationTenancyTest extends TestCase
         ]);
         Sanctum::actingAs($user);
 
-        $ids = collect($this->getJson('/api/admin/v1/accommodations?limit=200')->json('data'))->pluck('id');
+        $ids = collect($this->getJson('/api/admin/v1/accommodations?search=test&limit=100')->json('data'))->pluck('id');
 
         $this->assertTrue($ids->contains($this->accA->id));
         $this->assertTrue($ids->contains($this->accB->id));

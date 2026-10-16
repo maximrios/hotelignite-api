@@ -26,6 +26,8 @@ class CityController extends BaseController
         // Se piden `limit + 1` para saber si hay más sin pagar un COUNT(*) sobre
         // la tabla entera en cada tecla. El de más se descarta antes de serializar.
         $cities = City::with('state')
+            // Resolver una ciudad ya elegida (el filtro del listado la trae por id en la URL).
+            ->when($request->integer('id'), fn ($q, $id) => $q->whereKey($id))
             ->when(
                 $request->search,
                 fn ($q, $search) => $q->whereLike('name', "%{$search}%")

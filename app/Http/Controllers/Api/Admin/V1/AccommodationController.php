@@ -16,17 +16,25 @@ class AccommodationController extends BaseController
 {
     use AuthorizesRequests;
 
+    private const MAX_LIMIT = 100;
+
     public function index(Request $request)
     {
         $user = $request->user();
         $this->authorize('viewAny', Accommodation::class);
 
-        $limit = $request->integer('limit', 15);
+        // Tope duro: sin él, `?limit=` pedía la tabla entera de una vez.
+        $limit = min(max($request->integer('limit', 15), 1), self::MAX_LIMIT);
 
         $accommodations = Accommodation::with(['city', 'state', 'type'])
             ->visibleTo($user)
             ->when($request->search, fn ($q, $search) => $q->whereLike('name', "%{$search}%"))
             ->when($request->has('enabled'), fn ($q) => $q->where('enabled', $request->boolean('enabled')))
+            ->when($request->integer('city_id'), fn ($q, $cityId) => $q->where('city_id', $cityId))
+            ->when($request->integer('type_id'), fn ($q, $typeId) => $q->where('type_id', $typeId))
+            // Estado derivado del padrón: borrador = sin dueño todavía.
+            ->when($request->owner === 'draft', fn ($q) => $q->whereNull('account_id'))
+            ->when($request->owner === 'claimed', fn ($q) => $q->whereNotNull('account_id'))
             // Solo platform puede filtrar por una cuenta arbitraria; el resto queda scopeado por visibleTo.
             ->when($user->isPlatform() && $request->account_id, fn ($q, $accountId) => $q->where('account_id', $accountId))
             ->paginate($limit);
