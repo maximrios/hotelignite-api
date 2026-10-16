@@ -12,6 +12,7 @@ class Feature extends Model
         'module',
         'type',
         'description',
+        'audience',
     ];
 
     public function plans()

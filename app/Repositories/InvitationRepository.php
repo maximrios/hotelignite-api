@@ -28,6 +28,33 @@ use Illuminate\Support\Str;
  */
 class InvitationRepository implements InvitationInterface
 {
+    /**
+     * Estado del asociado en el padrón, derivado (no se guarda):
+     *   rechazado   → el hotelero dijo que no
+     *   vinculado   → aceptó el vínculo (convenio, socio, adhesión)
+     *   invitado    → hay una invitación vigente sin responder
+     *   borrador    → sin dueño en HotelIgnite
+     *   sin_vinculo → tiene dueño pero no aceptó el vínculo con este client
+     * Publicar es otro eje (`verified_at`, el "Habilitar" del client).
+     */
+    public const STATES = ['borrador', 'invitado', 'sin_vinculo', 'vinculado', 'rechazado'];
+
+    private const STATE_SQL = <<<'SQL'
+        CASE
+            WHEN ac.status = 'rejected' THEN 'rechazado'
+            WHEN ac.agreed_at IS NOT NULL THEN 'vinculado'
+            WHEN EXISTS (
+                SELECT 1 FROM invitations pi
+                 WHERE pi.client_id = ac.client_id
+                   AND pi.accommodation_id = ac.accommodation_id
+                   AND pi.accepted_at IS NULL AND pi.declined_at IS NULL
+                   AND pi.expires_at > NOW()
+            ) THEN 'invitado'
+            WHEN a.account_id IS NULL THEN 'borrador'
+            ELSE 'sin_vinculo'
+        END
+        SQL;
+
     public function emit(int $clientId, User $createdBy, array $invitations): array
     {
         $days = (int) config('api.invitation_expiration_days', 30);
@@ -93,6 +120,16 @@ class InvitationRepository implements InvitationInterface
 
     public function resend(Invitation $invitation, User $user): Invitation
     {
+        // Una aceptada no se reabre: el vínculo ya existe. Una rechazada respeta el
+        // mismo plazo que invitar de nuevo, o "Reenviar" saltearía el anti-spam.
+        abort_if($invitation->accepted_at !== null, 422, 'La invitación ya fue aceptada.');
+        $cooldown = (int) config('api.invitation_decline_cooldown_days', 90);
+        abort_if(
+            $invitation->declined_at !== null && $invitation->declined_at->gt(now()->subDays($cooldown)),
+            422,
+            'El alojamiento rechazó la invitación hace poco. Vas a poder volver a invitarlo más adelante.'
+        );
+
         // Rotamos el token en la misma fila: el anterior deja de servir (cambia el
         // hash) y sale uno nuevo. Evita chocar con el índice único parcial de
         // pendientes, y reabre la invitación si había sido declinada.
@@ -123,10 +160,16 @@ class InvitationRepository implements InvitationInterface
     {
         $invitation->loadMissing(['client', 'accommodation']);
 
+        $accommodationName = $invitation->accommodation?->name ?? $invitation->accommodation_name;
+
         return [
             'case' => $this->resolveCase($invitation),
             'status' => $invitation->statusLabel(),
             'client_name' => $invitation->client?->name,
+            'client_type' => $invitation->client?->type,
+            // La frase que cambia según quién invita ("te propone un convenio",
+            // "como socio de la cámara"...). Null si invita el staff.
+            'pitch' => $invitation->client?->invitationPitch($accommodationName),
             'contact_name' => $invitation->contact_name,
             // El alojamiento reclamado gana; si no hay, el nombre propuesto al invitar.
             'accommodation_name' => $invitation->accommodation?->name ?? $invitation->accommodation_name,
@@ -182,47 +225,268 @@ class InvitationRepository implements InvitationInterface
 
         $this->assertAuthedAsInvitedEmail($authUser, $invitation);
 
+        $this->markDeclinedWithPivot($invitation);
+    }
+
+    public function emitForAccommodations(int $clientId, User $createdBy, array $accommodationIds, ?string $email = null): array
+    {
+        $client = Client::findOrFail($clientId);
+        $days = (int) config('api.invitation_expiration_days', 30);
+        $cooldown = (int) config('api.invitation_decline_cooldown_days', 90);
+        $override = $email !== null ? strtolower(trim($email)) : null;
+        $sent = [];
+        $skipped = [];
+
+        $accommodations = $client->accommodations()
+            ->whereIn('accommodations.id', array_unique(array_map('intval', $accommodationIds)))
+            ->get()
+            ->keyBy('id');
+
+        foreach (array_unique(array_map('intval', $accommodationIds)) as $id) {
+            $skip = function (string $reason) use (&$skipped, $id): void {
+                $skipped[] = ['accommodation_id' => $id, 'reason' => $reason];
+            };
+
+            $accommodation = $accommodations->get($id);
+            if ($accommodation === null) {
+                $skip('not_in_padron');
+
+                continue;
+            }
+            if ($accommodation->pivot->agreed_at !== null) {
+                $skip('already_agreed');
+
+                continue;
+            }
+
+            $previous = Invitation::where('client_id', $clientId)
+                ->where('accommodation_id', $id)
+                ->latest('id')
+                ->first();
+
+            if ($previous?->isUsable()) {
+                $skip('already_invited');
+
+                continue;
+            }
+            // Anti-spam: si el hotelero dijo que no, el client espera antes de volver a pedir.
+            if ($previous?->declined_at !== null && $previous->declined_at->gt(now()->subDays($cooldown))) {
+                $skip('declined_recently');
+
+                continue;
+            }
+
+            $to = $this->recipientFor($accommodation, $override);
+            if ($to === null) {
+                $skip('no_email');
+
+                continue;
+            }
+
+            $plain = Invitation::generateToken();
+            $attributes = [
+                'email' => $to,
+                'accommodation_name' => $accommodation->name,
+                'token_hash' => Invitation::hashToken($plain),
+                'expires_at' => now()->addDays($days),
+                'accepted_at' => null,
+                'accepted_by_user_id' => null,
+                'declined_at' => null,
+                'created_by_user_id' => $createdBy->id,
+            ];
+
+            // Una vencida sigue "pendiente" para el índice único: se reusa la fila.
+            $invitation = $previous !== null && $previous->isPending()
+                ? tap($previous)->forceFill($attributes)->save()
+                : Invitation::create($attributes + ['client_id' => $clientId, 'accommodation_id' => $id]);
+
+            if ($accommodation->pivot->invitation_id !== $invitation->id) {
+                $client->accommodations()->updateExistingPivot($id, ['invitation_id' => $invitation->id]);
+            }
+
+            Mail::to($to)->queue(new InvitationMail($invitation, $plain));
+            $sent[] = $id;
+        }
+
+        return ['sent' => $sent, 'skipped' => $skipped];
+    }
+
+    public function incomingFor(User $owner): array
+    {
+        if (! $owner->isAccount() || $owner->account_id === null) {
+            return [];
+        }
+
+        return Invitation::with(['client', 'accommodation'])
+            ->whereHas('accommodation', fn ($q) => $q->where('account_id', $owner->account_id))
+            ->whereNotNull('client_id')
+            ->pending()
+            ->where('expires_at', '>', now())
+            ->latest('id')
+            ->get()
+            ->map(fn (Invitation $i) => [
+                'id' => $i->id,
+                'client_name' => $i->client?->name,
+                'client_type' => $i->client?->type,
+                'accommodation_id' => $i->accommodation_id,
+                'accommodation_name' => $i->accommodation?->name,
+                'pitch' => $i->client?->invitationPitch($i->accommodation?->name),
+                'expires_at' => $i->expires_at,
+            ])
+            ->values()
+            ->all();
+    }
+
+    public function respondAsOwner(Invitation $invitation, User $owner, bool $accept): void
+    {
+        abort_unless($invitation->isUsable(), 410, 'La invitación ya no es válida.');
+        abort_if($this->resolveCase($invitation) !== 'consent', 422, 'Esta invitación se responde desde el enlace del mail.');
+        abort_unless(
+            $owner->isAccount() && $owner->account_id !== null && $invitation->accommodation->account_id === $owner->account_id,
+            403,
+            'Solo el dueño del alojamiento puede responder.'
+        );
+
+        if (! $accept) {
+            $this->markDeclinedWithPivot($invitation);
+
+            return;
+        }
+
+        DB::transaction(function () use ($invitation, $owner) {
+            $invitation = Invitation::whereKey($invitation->id)->lockForUpdate()->first();
+            abort_unless($invitation->isUsable(), 410, 'La invitación ya no es válida.');
+
+            $this->linkPivot($invitation, $invitation->accommodation_id, 'active');
+            $invitation->markAccepted($owner);
+        });
+    }
+
+    private function markDeclinedWithPivot(Invitation $invitation): void
+    {
         DB::transaction(function () use ($invitation) {
             $invitation->markDeclined();
 
             if ($invitation->client_id && $invitation->accommodation_id) {
                 $client = Client::find($invitation->client_id);
                 if ($client && $client->accommodations()->where('accommodations.id', $invitation->accommodation_id)->exists()) {
-                    $client->accommodations()->updateExistingPivot($invitation->accommodation_id, ['status' => 'rejected']);
+                    $client->accommodations()->updateExistingPivot($invitation->accommodation_id, [
+                        'status' => 'rejected',
+                        'agreed_at' => null,
+                    ]);
                 }
             }
         });
     }
 
-    public function associates(int $clientId): array
+    /**
+     * A quién se le escribe. Con dueño, al dueño: es quien tiene que aceptar y el
+     * accept exige estar logueado con ese email. Sin dueño, al email del registro
+     * o al que cargó el client.
+     */
+    private function recipientFor(Accommodation $accommodation, ?string $override): ?string
+    {
+        if ($accommodation->account_id !== null) {
+            $owner = User::where('account_id', $accommodation->account_id)
+                ->where('user_type', User::TYPE_ACCOUNT)
+                ->oldest('id')
+                ->value('email');
+
+            return $owner !== null ? strtolower($owner) : null;
+        }
+
+        $email = $override ?: strtolower(trim((string) $accommodation->email));
+
+        return filter_var($email, FILTER_VALIDATE_EMAIL) !== false ? $email : null;
+    }
+
+    public function associates(int $clientId, array $filters = []): array
     {
         $client = Client::findOrFail($clientId);
+        $state = self::STATE_SQL;
 
-        $associates = $client->accommodations()->get()->map(fn (Accommodation $a) => [
-            'accommodation_id' => $a->id,
-            'name' => $a->name,
-            'slug' => $a->slug,
-            'pivot_status' => $a->pivot->status,
-            'verified_at' => $a->pivot->verified_at,
-            'state' => $this->derivedState($a),
+        $base = DB::table('accommodation_client as ac')
+            ->join('accommodations as a', 'a.id', '=', 'ac.accommodation_id')
+            ->where('ac.client_id', $clientId)
+            ->whereNull('a.deleted_at');
+
+        $counts = (clone $base)
+            ->selectRaw("{$state} as state, count(*) as total")
+            ->groupBy(DB::raw($state))
+            ->pluck('total', 'state');
+
+        $perPage = min(max((int) ($filters['per_page'] ?? 50), 1), 100);
+
+        $page = (clone $base)
+            ->leftJoin('cities as c', 'c.id', '=', 'a.city_id')
+            ->leftJoin('invitations as i', function ($join) {
+                $join->on('i.client_id', '=', 'ac.client_id')
+                    ->on('i.accommodation_id', '=', 'ac.accommodation_id')
+                    ->whereNull('i.accepted_at')
+                    ->whereNull('i.declined_at')
+                    ->where('i.expires_at', '>', now());
+            })
+            ->when(in_array($filters['state'] ?? null, self::STATES, true), fn ($q) => $q->whereRaw("{$state} = ?", [$filters['state']]))
+            ->when($filters['search'] ?? null, fn ($q, $search) => $q->whereRaw('unaccent(a.name) ilike unaccent(?)', ['%'.$search.'%']))
+            ->when($filters['city_id'] ?? null, fn ($q, $cityId) => $q->where('a.city_id', $cityId))
+            ->orderBy('a.name')
+            ->select([
+                'a.id as accommodation_id', 'a.name', 'a.slug', 'a.account_id', 'a.email',
+                'c.name as city', 'ac.agreed_at', 'ac.verified_at',
+                'i.id as invitation_id', 'i.expires_at as invitation_expires_at',
+            ])
+            ->selectRaw("{$state} as state")
+            ->paginate($perPage, ['*'], 'page', max((int) ($filters['page'] ?? 1), 1));
+
+        $associates = collect($page->items())->map(fn (object $row) => [
+            'accommodation_id' => $row->accommodation_id,
+            'name' => $row->name,
+            'slug' => $row->slug,
+            'city' => $row->city,
+            'state' => $row->state,
+            'published' => $row->verified_at !== null,
+            'agreed_at' => $row->agreed_at,
+            // Si se puede invitar sin pedirle un email al client. El email en sí
+            // no se expone: con dueño, es el de su cuenta.
+            'has_email' => $row->account_id !== null || filter_var((string) $row->email, FILTER_VALIDATE_EMAIL) !== false,
+            'invitation' => $row->invitation_id === null ? null : [
+                'id' => $row->invitation_id,
+                'expires_at' => $row->invitation_expires_at,
+            ],
         ])->values();
 
-        $pendingInvitations = Invitation::with('accommodation')
-            ->where('client_id', $clientId)
+        // Invitaciones por email (alta de un alojamiento que todavía no existe).
+        $pendingInvitations = Invitation::where('client_id', $clientId)
+            ->whereNull('accommodation_id')
             ->pending()
+            ->latest('id')
             ->get()
             ->map(fn (Invitation $i) => [
                 'invitation_id' => $i->id,
                 'email' => $i->email,
                 'contact_name' => $i->contact_name,
-                'accommodation_id' => $i->accommodation_id,
-                'accommodation_name' => $i->accommodation?->name ?? $i->accommodation_name,
+                'accommodation_id' => null,
+                'accommodation_name' => $i->accommodation_name,
                 'state' => 'invitado',
                 'expires_at' => $i->expires_at,
             ])->values();
 
         return [
-            'associates' => $associates,
+            'client_type' => $client->type,
+            'vocabulary' => $client->relationshipVocabulary(),
+            'counts' => collect(self::STATES)->mapWithKeys(fn (string $s) => [$s => (int) ($counts[$s] ?? 0)])
+                ->put('total', (int) $counts->sum()),
+            'associates' => [
+                'data' => $associates,
+                'meta' => [
+                    'current_page' => $page->currentPage(),
+                    'last_page' => $page->lastPage(),
+                    'from' => $page->firstItem(),
+                    'to' => $page->lastItem(),
+                    'per_page' => $page->perPage(),
+                    'total' => $page->total(),
+                ],
+            ],
             'pending_invitations' => $pendingInvitations,
         ];
     }
@@ -424,31 +688,13 @@ class InvitationRepository implements InvitationInterface
             return;
         }
 
-        $attributes = ['status' => $status, 'invitation_id' => $invitation->id];
+        // Aceptar la invitación ES aceptar el vínculo (convenio, socio, adhesión).
+        $attributes = ['status' => $status, 'agreed_at' => now(), 'invitation_id' => $invitation->id];
 
         if ($client->accommodations()->where('accommodations.id', $accommodationId)->exists()) {
             $client->accommodations()->updateExistingPivot($accommodationId, $attributes);
         } else {
             $client->accommodations()->attach($accommodationId, $attributes);
         }
-    }
-
-    /**
-     * Estado del asociado para el padrón (§5). Sin gate de staff, el pivote nace
-     * `active`, así que lo que distingue al publicable es el "Habilitar" del
-     * client (`verified_at`):
-     *   borrador   → sin dueño todavía
-     *   reclamado  → tiene dueño pero el client no lo habilitó
-     *   habilitado → el client lo habilitó (verified_at)
-     * El estado intermedio `completo` (checklist) se agrega cuando exista la
-     * completitud; hoy no se modela.
-     */
-    private function derivedState(Accommodation $accommodation): string
-    {
-        if ($accommodation->account_id === null) {
-            return 'borrador';
-        }
-
-        return $accommodation->pivot->verified_at !== null ? 'habilitado' : 'reclamado';
     }
 }

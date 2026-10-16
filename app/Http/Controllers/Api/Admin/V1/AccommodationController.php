@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateAccommodationRequest;
 use App\Http\Resources\Admin\AccommodationResource;
 use App\Http\Resources\Admin\AccommodationResourceCollection;
 use App\Models\Accommodation;
+use App\Models\User;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -27,6 +28,7 @@ class AccommodationController extends BaseController
         $limit = min(max($request->integer('limit', 15), 1), self::MAX_LIMIT);
 
         $accommodations = Accommodation::with(['city', 'state', 'type'])
+            ->with($this->clientPivot($user))
             ->visibleTo($user)
             ->when($request->search, fn ($q, $search) => $q->whereLike('name', "%{$search}%"))
             ->when($request->has('enabled'), fn ($q) => $q->where('enabled', $request->boolean('enabled')))
@@ -42,16 +44,29 @@ class AccommodationController extends BaseController
         return new AccommodationResourceCollection($accommodations);
     }
 
-    public function show(Accommodation $accommodation)
+    public function show(Request $request, Accommodation $accommodation)
     {
         $this->authorize('view', $accommodation);
 
         // Las mismas relaciones que carga el index: sin esto el Resource omite
         // `city`, `state` y `type` (son `whenLoaded`), y el detalle devuelve
         // menos campos que el listado para el mismo recurso.
-        $accommodation->load(['city', 'state', 'type']);
+        $accommodation->load(['city', 'state', 'type'])->load($this->clientPivot($request->user()));
 
         return new AccommodationResource($accommodation);
+    }
+
+    /**
+     * Para un client, el pivote con él (sólo el suyo): el Resource lo usa para
+     * decidir si le muestra el contacto del alojamiento.
+     *
+     * @return array<string, \Closure>
+     */
+    private function clientPivot(User $user): array
+    {
+        return $user->isClient()
+            ? ['clients' => fn ($q) => $q->where('clients.id', $user->client_id)]
+            : [];
     }
 
     public function store(StoreAccommodationRequest $request)

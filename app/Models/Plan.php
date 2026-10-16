@@ -18,7 +18,14 @@ class Plan extends Model
         'sort_order',
         'is_public',
         'enabled',
+        'audience',
+        'price_provisional',
     ];
+
+    /** Plan de un alojamiento (hotelero) o de un client B2B. */
+    public const AUDIENCE_ACCOMMODATION = 'accommodation';
+
+    public const AUDIENCE_CLIENT = 'client';
 
     protected $casts = [
         'price' => 'integer',
@@ -26,7 +33,13 @@ class Plan extends Model
         'sort_order' => 'integer',
         'is_public' => 'boolean',
         'enabled' => 'boolean',
+        'price_provisional' => 'boolean',
     ];
+
+    public function scopeForAudience($query, string $audience)
+    {
+        return $query->where('audience', $audience);
+    }
 
     public function accounts()
     {

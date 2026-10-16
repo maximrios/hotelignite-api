@@ -21,6 +21,10 @@ class ClientResource extends JsonResource
             'active' => (bool) $this->active,
             'rate_limit_per_minute' => $this->rate_limit_per_minute,
             'effective_rate_limit' => $this->rateLimit(),
+            'plan_id' => $this->plan_id,
+            'legal_name' => $this->legal_name,
+            'tax_id' => $this->tax_id,
+            'iva_condition' => $this->iva_condition,
             'accommodations_count' => $this->whenCounted('accommodations'),
             'accommodations' => $this->whenLoaded('accommodations', fn () => $this->accommodations->map(fn ($a) => [
                 'id' => $a->id,

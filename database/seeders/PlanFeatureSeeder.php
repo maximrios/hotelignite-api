@@ -15,36 +15,39 @@ class PlanFeatureSeeder extends Seeder
     public function run(): void
     {
         // Bloques de features por nivel. Cada plan suma su bloque + los previos.
+        // `array_merge` y no `+`: con `+` gana el array de la izquierda y los
+        // límites que un plan superior sube (`users`, `channels_connected`) nunca
+        // se aplicaban — todos los planes quedaban con los del Free.
         $free = [
             'listing' => null, 'microsite' => null, 'multilang' => null, 'tours' => null,
             'accommodations' => 1, 'users' => 1, 'channels_connected' => 0,
         ];
 
-        $starter = $free + [
+        $starter = array_merge($free, [
             'booking_engine' => null, 'rate_management' => null,
             'promotions' => null, 'payment_gateway' => null,
             'users' => 3,
-        ];
+        ]);
 
-        $pro = $starter + [
+        $pro = array_merge($starter, [
             'channel_manager' => null, 'rate_parity' => null, 'ical_sync' => null,
             'pms' => null, 'front_desk' => null, 'pms_reports' => null, 'cash_register' => null,
             'users' => 10, 'channels_connected' => 10,
-        ];
+        ]);
 
-        $enterprise = $pro + [
+        $enterprise = array_merge($pro, [
             'invoicing_arca' => null, 'accounting_export' => null, 'api_access' => null,
             'accommodations' => null, 'users' => null, 'channels_connected' => null,
-        ];
+        ]);
 
         $matrix = [
-            'free'       => $free,
-            'starter'    => $starter,
-            'pro'        => $pro,
+            'free' => $free,
+            'starter' => $starter,
+            'pro' => $pro,
             'enterprise' => $enterprise,
         ];
 
-        $planIds    = DB::table('plans')->pluck('id', 'slug');
+        $planIds = DB::table('plans')->pluck('id', 'slug');
         $featureIds = DB::table('features')->pluck('id', 'slug');
 
         foreach ($matrix as $planSlug => $features) {

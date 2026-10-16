@@ -18,6 +18,7 @@ use App\Http\Controllers\Api\Admin\V1\DocumentTypeController;
 use App\Http\Controllers\Api\Admin\V1\EventCategoryController;
 use App\Http\Controllers\Api\Admin\V1\EventController;
 use App\Http\Controllers\Api\Admin\V1\EventMediaController;
+use App\Http\Controllers\Api\Admin\V1\IncomingInvitationController;
 use App\Http\Controllers\Api\Admin\V1\PlanController as AdminPlanController;
 use App\Http\Controllers\Api\Admin\V1\PoiCategoryController;
 use App\Http\Controllers\Api\Admin\V1\PointOfInterestController;
@@ -26,6 +27,7 @@ use App\Http\Controllers\Api\Admin\V1\StateController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
 use App\Http\Controllers\Api\ClientPanel\V1\AccommodationExportController;
 use App\Http\Controllers\Api\ClientPanel\V1\AssociateController;
+use App\Http\Controllers\Api\ClientPanel\V1\BillingController as ClientPanelBillingController;
 use App\Http\Controllers\Api\ClientPanel\V1\DocumentController as ClientPanelDocumentController;
 use App\Http\Controllers\Api\ClientPanel\V1\EventController as ClientPanelEventController;
 use App\Http\Controllers\Api\ClientPanel\V1\InvitationController as ClientPanelInvitationController;
@@ -110,8 +112,16 @@ Route::middleware(['auth:sanctum', 'client.user'])->prefix('client-panel/v1')->g
         ->middleware('throttle:invitations')->name('client-panel.invitations.resend');
     Route::get('associates', [AssociateController::class, 'index'])
         ->middleware('throttle:api')->name('client-panel.associates.index');
+    Route::post('associates/invite', [AssociateController::class, 'invite'])
+        ->middleware('throttle:invitations')->name('client-panel.associates.invite');
     Route::get('accommodations/export', [AccommodationExportController::class, 'index'])
         ->middleware('throttle:api')->name('client-panel.accommodations.export');
+
+    // Facturación: plan, consumo del mes y presupuesto formal para Compras.
+    Route::get('billing', [ClientPanelBillingController::class, 'index'])
+        ->middleware('throttle:api')->name('client-panel.billing.index');
+    Route::get('billing/quote', [ClientPanelBillingController::class, 'quote'])
+        ->middleware('throttle:api')->name('client-panel.billing.quote');
 
     // Legajo — lado client: solo lo compartido + su checklist. Ver §8.
     Route::get('document-requirements', [ClientPanelDocumentController::class, 'requirements'])
@@ -151,6 +161,12 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::put('accommodations/{accommodation}', [AccommodationController::class, 'update'])->name('admin.accommodations.update');
             Route::patch('accommodations/{accommodation}', [AccommodationController::class, 'partialUpdate'])->name('admin.accommodations.partial-update');
             Route::delete('accommodations/{accommodation}', [AccommodationController::class, 'destroy'])->name('admin.accommodations.destroy');
+
+            // Bandeja del hotelero: pedidos de convenio / socio / adhesión de los
+            // clients. El repositorio exige que sea el dueño del alojamiento.
+            Route::get('incoming-invitations', [IncomingInvitationController::class, 'index'])->name('admin.incoming-invitations.index');
+            Route::post('incoming-invitations/{invitation}/accept', [IncomingInvitationController::class, 'accept'])->name('admin.incoming-invitations.accept');
+            Route::post('incoming-invitations/{invitation}/decline', [IncomingInvitationController::class, 'decline'])->name('admin.incoming-invitations.decline');
 
             Route::get('services', [ServiceController::class, 'index'])->name('admin.services.index');
             Route::get('services/{service}', [ServiceController::class, 'show'])->name('admin.services.show');
@@ -224,12 +240,15 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
 
             // Gestión de clients B2B y sus API keys — solo plataforma (F4).
             Route::middleware('platform')->group(function () {
+                Route::patch('plans/{plan}', [AdminPlanController::class, 'update'])->name('admin.plans.update');
+
                 Route::get('clients', [ClientController::class, 'index'])->name('admin.clients.index');
                 Route::post('clients', [ClientController::class, 'store'])->name('admin.clients.store');
                 Route::get('clients/{client}', [ClientController::class, 'show'])->name('admin.clients.show');
                 Route::patch('clients/{client}', [ClientController::class, 'update'])->name('admin.clients.update');
 
                 Route::post('clients/{client}/accommodations', [ClientController::class, 'attachAccommodations'])->name('admin.clients.accommodations.attach');
+                Route::post('clients/{client}/accommodations/bulk', [ClientController::class, 'attachAccommodationsByFilter'])->name('admin.clients.accommodations.attach-bulk');
                 Route::delete('clients/{client}/accommodations/{accommodationId}', [ClientController::class, 'detachAccommodation'])->name('admin.clients.accommodations.detach');
 
                 Route::post('clients/{client}/keys', [ClientApiKeyController::class, 'store'])->name('admin.clients.keys.store');
@@ -295,7 +314,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
     Route::prefix('v1')->group(function () {
 
         Route::get('accommodations', [WebAccommodationController::class, 'index'])->name('accommodations.index');
-        //Route::get('accommodation', [AccommodationController::class, 'show'])->name('accommodations.show');
+        // Route::get('accommodation', [AccommodationController::class, 'show'])->name('accommodations.show');
         Route::get('accommodation/{slug}', [AccommodationController::class, 'show'])->name('accommodations.show');
         Route::put('accommodations/{id}', [AccommodationController::class, 'update'])->name('accommodations.update');
         Route::post('accommodations', [AccommodationController::class, 'store'])->name('accommodations.store');

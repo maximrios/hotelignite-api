@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             PlanSeeder::class,
             FeatureSeeder::class,
             PlanFeatureSeeder::class,
+            ClientPlanSeeder::class,
             DocumentTypeSeeder::class,
             ClientDocumentRequirementSeeder::class,
             PoiCategorySeeder::class,

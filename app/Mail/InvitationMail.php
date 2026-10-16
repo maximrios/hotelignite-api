@@ -33,8 +33,7 @@ class InvitationMail extends Mailable implements ShouldQueue
     public function __construct(
         public Invitation $invitation,
         public string $token,
-    ) {
-    }
+    ) {}
 
     public function build(): self
     {
@@ -43,12 +42,20 @@ class InvitationMail extends Mailable implements ShouldQueue
 
         $this->invitation->loadMissing(['client', 'accommodation']);
 
-        return $this->subject('Te invitaron a HotelIgnite')
+        $client = $this->invitation->client;
+        $accommodation = $this->invitation->accommodation;
+        $accommodationName = $accommodation?->name ?? $this->invitation->accommodation_name;
+        // Un único mail para municipio, cámara y agencia: lo que cambia es la
+        // frase (`Client::relationshipVocabulary()`) y si hay que registrarse.
+        $hasOwner = $accommodation?->account_id !== null;
+
+        return $this->subject($client ? "{$client->name} te invita a HotelIgnite" : 'Te invitaron a HotelIgnite')
             ->markdown('emails.invitation', [
                 'url' => $url,
-                'clientName' => $this->invitation->client?->name,
+                'pitch' => $client?->invitationPitch($accommodationName),
                 'contactName' => $this->invitation->contact_name,
-                'accommodationName' => $this->invitation->accommodation?->name ?? $this->invitation->accommodation_name,
+                'accommodationName' => $accommodationName,
+                'hasOwner' => $hasOwner,
                 'expirationDays' => (int) config('api.invitation_expiration_days', 30),
             ]);
     }

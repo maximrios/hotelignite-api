@@ -140,7 +140,7 @@ class Accommodation extends Model
     public function clients()
     {
         return $this->belongsToMany(Client::class, 'accommodation_client')
-            ->withPivot(['status', 'verified_at', 'verified_by_user_id', 'invitation_id'])
+            ->withPivot(['status', 'agreed_at', 'verified_at', 'verified_by_user_id', 'invitation_id'])
             ->withTimestamps();
     }
 

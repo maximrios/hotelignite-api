@@ -7,6 +7,29 @@ Reemplaza la premisa anterior de la skill ("el alta la hace el staff, el client
 no invita"). El cambio es deliberado: **el que conoce a los alojamientos es el
 client**, no el staff. Un municipio tiene el padrón; nosotros no.
 
+> **Actualización 2026-10-16 — padrón con vínculo.** Lo que sigue se escribió
+> antes; donde contradiga esto, gana esto.
+>
+> - **El staff arma el padrón** desde el CRM (`POST admin/v1/clients/{client}/accommodations/bulk`,
+>   por los mismos filtros del listado). Estar en el padrón ≠ tener vínculo.
+> - **`accommodation_client.agreed_at`** = el hotelero aceptó el vínculo (convenio,
+>   socio, adhesión). Lo escribe todo accept (A, B, C y la bandeja del PMS); asociar
+>   desde el CRM lo deja en null. Sin vínculo, un client no ve el contacto de un
+>   alojamiento con dueño (`Admin\AccommodationResource`).
+> - **El client invita alojamientos de su padrón**: `POST client-panel/v1/associates/invite`
+>   (`accommodation_ids`, `email` sólo para un borrador sin email). Con dueño, el
+>   mail va al primer user `account` de la cuenta.
+> - **Una sola invitación y un solo mail** para todo tipo de client: la frase sale de
+>   `Client::relationshipVocabulary()` / `invitationPitch()`.
+> - **Bandeja del hotelero**: `GET admin/v1/incoming-invitations` + `accept` / `decline`
+>   por id. La sesión del dueño reemplaza al token (prueba la propiedad, no la casilla).
+> - **Índices**: el único `(client_id, pending_email)` vale sólo sin `accommodation_id`
+>   (un dueño con tres alojamientos recibe tres invitaciones del mismo client).
+> - **Anti-spam**: tras un rechazo, el mismo client no reinvita ni reenvía por
+>   `api.invitation_decline_cooldown_days` (90). `resend()` ya no reabre aceptadas.
+> - **Estados** derivados en `InvitationRepository::STATE_SQL`: borrador, invitado,
+>   sin_vinculo, vinculado, rechazado. Tests: `tests/Feature/AssociateInvitationTest.php`.
+
 ---
 
 ## 1. El problema que resuelve

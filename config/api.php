@@ -29,6 +29,10 @@ return [
     // semanas, y el costo de acortarlo son reenvíos (§5 de la skill).
     'invitation_expiration_days' => (int) env('API_INVITATION_EXPIRATION_DAYS', 30),
 
+    // Si el hotelero rechaza el vínculo, el mismo client no puede volver a
+    // invitarlo por este plazo. Es la defensa contra el spam a los hoteleros.
+    'invitation_decline_cooldown_days' => (int) env('API_INVITATION_DECLINE_COOLDOWN_DAYS', 90),
+
     // Plan por defecto de la Account que se crea al aceptar. Decisión tomada:
     // el default es `free` (§8) — por eso es seguro crear la cuenta al aceptar y
     // no al aprobar. Se resuelve por slug; si no existe, el alojamiento queda sin

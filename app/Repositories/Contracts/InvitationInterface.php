@@ -54,9 +54,39 @@ interface InvitationInterface
     public function decline(Invitation $invitation, ?User $authUser): void;
 
     /**
-     * Padrón del client: asociados con estado derivado + invitaciones pendientes.
+     * Invita a alojamientos que ya están en el padrón del client (asociados desde
+     * el CRM). Si el alojamiento es un borrador, la invitación es para tomar la
+     * ficha; si ya tiene dueño, para aceptar el vínculo. Mismo mail en los dos.
      *
+     * `$email` sólo vale para un borrador sin email cargado: a un alojamiento con
+     * dueño se le escribe siempre a su dueño.
+     *
+     * @param  array<int, int>  $accommodationIds
+     * @return array{sent: array<int, int>, skipped: array<int, array{accommodation_id: int, reason: string}>}
+     */
+    public function emitForAccommodations(int $clientId, User $createdBy, array $accommodationIds, ?string $email = null): array;
+
+    /**
+     * Padrón del client: asociados con estado derivado (paginado y filtrable),
+     * conteos por estado e invitaciones por email todavía sin alojamiento.
+     *
+     * @param  array{state?: ?string, search?: ?string, city_id?: ?int, page?: int, per_page?: int}  $filters
      * @return array<string, mixed>
      */
-    public function associates(int $clientId): array;
+    public function associates(int $clientId, array $filters = []): array;
+
+    /**
+     * Solicitudes de vínculo pendientes para los alojamientos de la cuenta del
+     * hotelero (bandeja del PMS).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function incomingFor(User $owner): array;
+
+    /**
+     * Acepta o rechaza una solicitud desde la bandeja del PMS. La sesión del
+     * dueño reemplaza al token del mail: lo que se prueba es la propiedad del
+     * alojamiento, no la casilla.
+     */
+    public function respondAsOwner(Invitation $invitation, User $owner, bool $accept): void;
 }

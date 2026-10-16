@@ -14,7 +14,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  *
  * Expone SOLO campos de catálogo. A diferencia de `Admin\AccommodationResource`
  * —que devuelve `bank_data`, `tax_identification` y comentarios internos del
- * hotelero, y hoy no filtra por rol—, este export nunca los toca. Es la razón
+ * hotelero salvo a un client—, este export nunca los toca. Es la razón
  * de no reusar aquel Resource. Ver el caveat en `clients/CLAUDE.md`.
  */
 class AccommodationExportController extends BaseController
