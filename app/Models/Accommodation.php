@@ -75,7 +75,6 @@ class Accommodation extends Model
     private const LEGACY_NOT_NULL_DEFAULTS = [
         'tax_identification' => '0',
         'logo' => '0',
-        'account_id' => 0,
         'name' => '0',
         'address' => '0',
         'email' => '0',

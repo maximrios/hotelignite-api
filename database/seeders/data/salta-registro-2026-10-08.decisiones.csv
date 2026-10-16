@@ -1,0 +1,58 @@
+fila,accion,slug,nota
+26,match,el-cortijo-hotel-boutique,
+179,match,chawasi-cabanas,Ruta 51 Km 17; en la base figura en Salta Capital
+194,match,cabañas-del-sol,Nuevas Cabañas del Sol; misma dirección (Ruta 28 Km 11.5)
+222,match,la-casona-de-moldes,
+223,match,la-posada-de-juan,
+225,match,hotel-del-dique,
+229,match,terrazas-del-lago,Excel dice RP 47 Km 9 y la base Km 11
+254,match,hotel-iruya,
+267,match,la-caldera-hosteria,
+314,match,cerros-de-terciopelo,
+321,new,,Apart Hotel Marilian: distinto del Hotel Marilian (#18)
+342,new,,Wilson Apart Hotel: distinto del Wilson Hotel
+349,match,hotel-de-la-linda,
+351,match,hotel-inti-raymi,
+352,match,hotel-iris,
+357,match,hotel-misoroj,
+361,match,hotel-samka,
+362,match,samsara-hotel,Ex Hotel Bonarda (mismo domicilio); Bonarda no se toca
+367,match,hotel-de-los-reyes,
+368,match,hotel-pettit,
+372,match,hotel-alto-parque,
+374,match,hotel-colonial,Zuviría 6
+375,match,hotel-el-pasaje,
+376,new,,Gaba Hotel: comparte email con Hotel Premier pero es otro establecimiento
+379,match,hotel-casa-blanca,
+380,match,hotel-continental,
+381,match,hotel-del-pilar,
+382,match,hotel-empleados-de-farmacia,
+383,match,hotel-premier,
+384,match,hotel-regidor,
+385,match,hotel-mirador-del-cerro,Hoy Vistas del Cerro San Bernardo (misma web)
+386,match,hotel-beltraneja,
+401,match,hotel-marilian,
+402,match,hotel-shauard,La base tiene dos Shauard con el mismo slug (ids 20 y 21)
+404,match,hotel-posada-del-sol,
+406,match,hotel-victoria-plaza,
+407,match,hotel-wilson,
+409,match,hotel-ayres-de-salta,
+414,match,hotel-almeria,
+415,match,casa-real-hotel,
+418,match,hotel-portezuelo,
+476,new,,Departamento (Santa Fe 80); no es el Hotel Los Pinos
+477,new,,Departamento (Santa Fe 80); no es el Hotel Los Pinos
+505,skip,,Duplicado exacto de la fila 504 (F & F Dpto 204)
+553,match,hostal-el-aljibe,
+579,new,,Otro establecimiento que el Hotel de la Linda
+581,match,hotel-ferienhaus,
+591,new,,Otro establecimiento que el Hotel de la Linda
+612,match,hostal-namaste,
+628,match,hotel-de-las-nubes,
+660,match,cabañas-del-norte,
+664,match,cabañas-san-lorenzo,
+666,new,,Distinto de Cabañas San Lorenzo
+673,match,el-castillo-de-san-lorenzo,
+676,match,las-moras-hotel,
+738,match,cabañas-el-vergel,
+742,match,hostal-terra-sognatta,
