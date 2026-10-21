@@ -29,6 +29,23 @@ class Client extends Model
      */
     public const PURCHASE_ORDER_TYPES = [self::TYPE_GOVERNMENT, self::TYPE_CHAMBER];
 
+    /** Lo dio de alta el staff desde el CRM. */
+    public const ORIGIN_STAFF = 'staff';
+
+    /** Se registró solo en el portal: confirma su email y lo verifica el staff. */
+    public const ORIGIN_SIGNUP = 'signup';
+
+    /**
+     * Plan con el que entra cada tipo de client. Todo client tiene siempre un
+     * plan: el free es el piso, nunca `plan_id` null.
+     */
+    public const FREE_PLAN_SLUGS = [
+        self::TYPE_AGENCY => 'client-agencia-free',
+        self::TYPE_COMPANY => 'client-agencia-free',
+        self::TYPE_GOVERNMENT => 'client-padron-inicial',
+        self::TYPE_CHAMBER => 'client-padron-inicial',
+    ];
+
     protected $fillable = [
         'name',
         'type',
@@ -41,12 +58,45 @@ class Client extends Model
         'legal_name',
         'tax_id',
         'iva_condition',
+        'license_number',
     ];
 
     protected $casts = [
         'active' => 'boolean',
         'rate_limit_per_minute' => 'integer',
+        'verified_at' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        // Sin plan explícito, entra con el free de su tipo. Si los planes todavía
+        // no se sembraron queda null y `ClientPlanSeeder` lo completa después.
+        static::creating(function (Client $client) {
+            $client->plan_id ??= self::freePlanIdFor($client->type);
+        });
+    }
+
+    public static function freePlanIdFor(?string $type): ?int
+    {
+        $slug = self::FREE_PLAN_SLUGS[$type] ?? null;
+
+        return $slug === null ? null : Plan::where('slug', $slug)->value('id');
+    }
+
+    /**
+     * Se registró solo y el staff todavía no lo revisó. Mientras tanto no puede
+     * invitar hoteleros: el mail sale con nuestro dominio y a nombre de una
+     * agencia que nadie conoce.
+     */
+    public function needsVerification(): bool
+    {
+        return $this->origin === self::ORIGIN_SIGNUP && $this->verified_at === null;
+    }
+
+    public function verifiedBy()
+    {
+        return $this->belongsTo(User::class, 'verified_by_user_id');
+    }
 
     public function users()
     {

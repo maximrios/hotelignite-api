@@ -18,6 +18,7 @@ class AuthServiceProvider extends ServiceProvider
         \App\Models\Account::class => \App\Policies\AccountPolicy::class,
         \App\Models\User::class => \App\Policies\UserPolicy::class,
         \App\Models\Event::class => \App\Policies\CatalogContentPolicy::class,
+        \App\Models\Experience::class => \App\Policies\CatalogContentPolicy::class,
         \App\Models\PointOfInterest::class => \App\Policies\CatalogContentPolicy::class,
 
         // Recursos hijos: heredan la tenencia del alojamiento dueño (B8).

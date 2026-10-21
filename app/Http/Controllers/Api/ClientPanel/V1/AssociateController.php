@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\ClientPanel\V1;
 
 use App\Http\Requests\ClientPanel\InviteAssociatesRequest;
+use App\Models\Client;
 use App\Repositories\Contracts\InvitationInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,19 @@ use Illuminate\Routing\Controller as BaseController;
 class AssociateController extends BaseController
 {
     public function __construct(private InvitationInterface $invitations) {}
+
+    /**
+     * Una agencia que se registró sola no invita hasta que el staff la verifica:
+     * el mail sale con nuestro dominio y a nombre de alguien que nadie revisó.
+     */
+    public static function assertCanInvite(?Client $client): void
+    {
+        abort_if(
+            $client?->needsVerification() ?? false,
+            403,
+            'Tu agencia todavía no está verificada. Vas a poder invitar alojamientos cuando revisemos tus datos.'
+        );
+    }
 
     public function index(Request $request): JsonResponse
     {
@@ -35,6 +49,7 @@ class AssociateController extends BaseController
      */
     public function invite(InviteAssociatesRequest $request): JsonResponse
     {
+        self::assertCanInvite($request->user()->client);
         $data = $request->validated();
 
         $result = $this->invitations->emitForAccommodations(

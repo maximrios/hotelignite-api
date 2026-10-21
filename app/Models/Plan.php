@@ -20,6 +20,7 @@ class Plan extends Model
         'enabled',
         'audience',
         'price_provisional',
+        'client_types',
     ];
 
     /** Plan de un alojamiento (hotelero) o de un client B2B. */
@@ -34,7 +35,19 @@ class Plan extends Model
         'is_public' => 'boolean',
         'enabled' => 'boolean',
         'price_provisional' => 'boolean',
+        'client_types' => 'array',
     ];
+
+    /** ¿Se le ofrece a este tipo de client? `client_types` null = a todos. */
+    public function offeredTo(?string $clientType): bool
+    {
+        return $this->client_types === null || in_array($clientType, $this->client_types, true);
+    }
+
+    public function isFree(): bool
+    {
+        return (int) $this->price === 0;
+    }
 
     public function scopeForAudience($query, string $audience)
     {

@@ -8,6 +8,7 @@ use App\Http\Requests\Admin\UpdateClientRequest;
 use App\Http\Resources\Admin\ClientResource;
 use App\Models\Accommodation;
 use App\Models\Client;
+use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
@@ -24,6 +25,8 @@ class ClientController extends BaseController
         $clients = Client::withCount('accommodations')
             ->when($request->filled('search'), fn ($q) => $q->whereLike('name', "%{$request->query('search')}%"))
             ->when($request->has('active'), fn ($q) => $q->where('active', $request->boolean('active')))
+            // Agencias que se registraron solas y esperan la verificación del staff.
+            ->when($request->boolean('pending_verification'), fn ($q) => $q->where('origin', Client::ORIGIN_SIGNUP)->whereNull('verified_at'))
             ->orderByDesc('id')
             ->paginate($request->integer('limit', 15));
 
@@ -32,7 +35,9 @@ class ClientController extends BaseController
 
     public function store(StoreClientRequest $request)
     {
-        $client = Client::create($request->validated());
+        $client = new Client($request->validated());
+        $this->assertPlanOffered($client);
+        $client->save();
 
         return (new ClientResource($client))->response()->setStatusCode(201);
     }
@@ -46,9 +51,41 @@ class ClientController extends BaseController
 
     public function update(UpdateClientRequest $request, Client $client)
     {
-        $client->update($request->validated());
+        $data = $request->validated();
+        $verified = array_key_exists('verified', $data) ? (bool) $data['verified'] : null;
+        unset($data['verified']);
+
+        $client->fill($data);
+
+        // Todo client tiene plan: sacarle el plan (o cambiarle el tipo sin plan)
+        // lo deja en el free de su tipo, no en null.
+        if ($client->plan_id === null) {
+            $client->plan_id = Client::freePlanIdFor($client->type);
+        }
+        $this->assertPlanOffered($client);
+
+        if ($verified !== null) {
+            $client->forceFill([
+                'verified_at' => $verified ? ($client->verified_at ?? now()) : null,
+                'verified_by_user_id' => $verified ? $request->user()->id : null,
+            ]);
+        }
+
+        $client->save();
 
         return new ClientResource($client->fresh());
+    }
+
+    /** Un plan de gobierno no se le asigna a una agencia, ni al revés. */
+    private function assertPlanOffered(Client $client): void
+    {
+        $plan = $client->plan_id ? Plan::find($client->plan_id) : null;
+
+        abort_if(
+            $plan !== null && ! $plan->offeredTo($client->type),
+            422,
+            'Ese plan no se ofrece a este tipo de client.'
+        );
     }
 
     public function attachAccommodations(AttachClientAccommodationsRequest $request, Client $client)

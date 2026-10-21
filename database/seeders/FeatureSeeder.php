@@ -46,6 +46,7 @@ class FeatureSeeder extends Seeder
             ['slug' => 'accommodations',     'name' => 'Propiedades por cuenta',       'module' => 'platform',     'type' => 'limit'],
             ['slug' => 'channels_connected', 'name' => 'Canales conectados',           'module' => 'platform',     'type' => 'limit'],
             ['slug' => 'api_access',         'name' => 'Acceso a la API / webhooks',   'module' => 'platform',     'type' => 'boolean'],
+            ['slug' => 'ai_assistant',       'name' => 'Asistente con IA para huéspedes', 'module' => 'platform', 'type' => 'boolean'],
         ];
 
         foreach ($features as $feature) {

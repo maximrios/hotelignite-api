@@ -9,7 +9,7 @@
 # El contexto de build es api/, no la raíz del monorepo:
 #   docker build -f docker/Dockerfile -t hotelignite/api .
 
-FROM php:8.4-fpm-bookworm
+FROM php:8.4.27-fpm-bookworm
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     COMPOSER_NO_INTERACTION=1

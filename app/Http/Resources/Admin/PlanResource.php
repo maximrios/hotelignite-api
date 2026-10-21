@@ -21,6 +21,8 @@ class PlanResource extends JsonResource
             'slug' => $this->slug,
             'subtitle' => $this->subtitle,
             'audience' => $this->audience,
+            // A qué tipos de client se ofrece (null = a todos). Sólo planes de client.
+            'client_types' => $this->client_types,
             'price' => $this->price,
             'currency' => $this->currency,
             'billing_period' => $this->billing_period,

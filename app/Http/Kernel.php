@@ -3,8 +3,10 @@
 namespace App\Http;
 
 use App\Http\Middleware\Authenticate;
+use App\Http\Middleware\AuthenticateAccommodationKey;
 use App\Http\Middleware\AuthenticateApiClient;
 use App\Http\Middleware\EncryptCookies;
+use App\Http\Middleware\EnsureAccommodationAbility;
 use App\Http\Middleware\EnsureClientAbility;
 use App\Http\Middleware\EnsureClientUser;
 use App\Http\Middleware\EnsureNotReadOnlyClient;
@@ -88,6 +90,8 @@ class Kernel extends HttpKernel
         'auth.basic' => AuthenticateWithBasicAuth::class,
         'auth.client' => AuthenticateApiClient::class,
         'client.ability' => EnsureClientAbility::class,
+        'auth.accommodation' => AuthenticateAccommodationKey::class,
+        'accommodation.ability' => EnsureAccommodationAbility::class,
         'json.response' => ForceJsonResponse::class,
         'client.readonly' => EnsureNotReadOnlyClient::class,
         'client.user' => EnsureClientUser::class,

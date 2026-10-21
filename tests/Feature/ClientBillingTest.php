@@ -47,30 +47,35 @@ class ClientBillingTest extends TestCase
         ]));
     }
 
-    public function test_un_municipio_paga_con_orden_de_compra_y_no_ve_planes_de_venta(): void
+    public function test_un_municipio_entra_con_padron_inicial_y_ve_solo_planes_de_gobierno(): void
     {
         $client = Client::create(['name' => 'Municipio facturación', 'type' => Client::TYPE_GOVERNMENT]);
         $this->actingAsClient($client);
 
         $response = $this->getJson('/api/client-panel/v1/billing')->assertOk();
 
+        // Todo client entra con el plan free de su tipo.
         $response->assertJsonPath('payment_channel', 'purchase_order')
-            ->assertJsonPath('plan', null)
-            ->assertJsonPath('usage.api_requests.limit', false);
+            ->assertJsonPath('plan.slug', 'client-padron-inicial')
+            ->assertJsonPath('usage.api_requests.limit', 1000);
 
         $slugs = collect($response->json('available_plans'))->pluck('slug');
-        $this->assertSame(['client-padron', 'client-destino', 'client-provincia'], $slugs->all());
+        $this->assertSame(['client-padron-inicial', 'client-padron', 'client-destino', 'client-provincia'], $slugs->all());
     }
 
-    public function test_una_agencia_paga_con_mercado_pago_y_ve_el_plan_con_venta(): void
+    public function test_una_agencia_entra_con_el_free_y_ve_free_pro_y_venta(): void
     {
         $client = Client::create(['name' => 'Agencia facturación', 'type' => Client::TYPE_AGENCY]);
         $this->actingAsClient($client);
 
         $response = $this->getJson('/api/client-panel/v1/billing')->assertOk();
 
-        $response->assertJsonPath('payment_channel', 'mercadopago');
-        $this->assertSame(['client-agencia'], collect($response->json('available_plans'))->pluck('slug')->all());
+        $response->assertJsonPath('payment_channel', 'mercadopago')
+            ->assertJsonPath('plan.slug', 'client-agencia-free');
+        $this->assertSame(
+            ['client-agencia-free', 'client-agencia-pro', 'client-agencia'],
+            collect($response->json('available_plans'))->pluck('slug')->all()
+        );
     }
 
     public function test_el_consumo_del_mes_se_mide_contra_el_plan(): void

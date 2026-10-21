@@ -32,6 +32,8 @@ class BillingController extends BaseController
         // audience o de un plan oculto responde 404, no un presupuesto.
         $plan = $this->billing->plansFor($client)->firstWhere('slug', $request->string('plan')->toString());
         abort_if($plan === null, 404, 'Plan no disponible.');
+        // Un plan gratis no se compra: no hay presupuesto que armar.
+        abort_if($plan->isFree(), 404, 'Ese plan es gratis: no necesita presupuesto.');
 
         return response()->json($this->billing->clientQuote($client, $plan));
     }

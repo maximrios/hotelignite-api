@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\V1\AccommodationApiKeyController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationChannelController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationDocumentController;
@@ -18,6 +19,9 @@ use App\Http\Controllers\Api\Admin\V1\DocumentTypeController;
 use App\Http\Controllers\Api\Admin\V1\EventCategoryController;
 use App\Http\Controllers\Api\Admin\V1\EventController;
 use App\Http\Controllers\Api\Admin\V1\EventMediaController;
+use App\Http\Controllers\Api\Admin\V1\ExperienceCategoryController;
+use App\Http\Controllers\Api\Admin\V1\ExperienceController;
+use App\Http\Controllers\Api\Admin\V1\ExperienceMediaController;
 use App\Http\Controllers\Api\Admin\V1\IncomingInvitationController;
 use App\Http\Controllers\Api\Admin\V1\PlanController as AdminPlanController;
 use App\Http\Controllers\Api\Admin\V1\PoiCategoryController;
@@ -30,8 +34,12 @@ use App\Http\Controllers\Api\ClientPanel\V1\AssociateController;
 use App\Http\Controllers\Api\ClientPanel\V1\BillingController as ClientPanelBillingController;
 use App\Http\Controllers\Api\ClientPanel\V1\DocumentController as ClientPanelDocumentController;
 use App\Http\Controllers\Api\ClientPanel\V1\EventController as ClientPanelEventController;
+use App\Http\Controllers\Api\ClientPanel\V1\ExperienceController as ClientPanelExperienceController;
+use App\Http\Controllers\Api\ClientPanel\V1\InquiryController as ClientPanelInquiryController;
 use App\Http\Controllers\Api\ClientPanel\V1\InvitationController as ClientPanelInvitationController;
 use App\Http\Controllers\Api\ClientPanel\V1\PointOfInterestController as ClientPanelPointOfInterestController;
+use App\Http\Controllers\Api\ClientPanel\V1\ProfileController as ClientPanelProfileController;
+use App\Http\Controllers\Api\ClientPanel\V1\SignupController;
 use App\Http\Controllers\Api\Invitations\PublicInvitationController;
 use App\Http\Controllers\Api\V1\AccommodationAvailabilityController;
 use App\Http\Controllers\Api\V1\AccommodationController as WebAccommodationController;
@@ -101,6 +109,19 @@ Route::prefix('v1/invitations')->middleware('throttle:invitations-public')->grou
 });
 
 /*
+| Registro de agencias en el portal de clients. Público: crea un client (plan
+| free, origen `signup`) y su primer user. Ver `SignupController`.
+*/
+Route::prefix('client-panel/v1/signup')->group(function () {
+    Route::post('/', [SignupController::class, 'register'])
+        ->middleware('throttle:signup')->name('client-panel.signup.register');
+    Route::post('resend', [SignupController::class, 'resend'])
+        ->middleware('throttle:signup-resend')->name('client-panel.signup.resend');
+    Route::get('verify/{user}/{hash}', [SignupController::class, 'verify'])
+        ->middleware(['signed:relative', 'throttle:invitations-public'])->name('client-panel.signup.verify');
+});
+
+/*
 | Panel de client (B2B): el client invita hoteleros y ve su padrón. Grupo aparte
 | de `client.readonly` a propósito — un client SÍ escribe acá (crea invitaciones).
 | La tenencia sale del token (`client.user` + `$request->user()->client_id`, §12).
@@ -110,6 +131,8 @@ Route::middleware(['auth:sanctum', 'client.user'])->prefix('client-panel/v1')->g
         ->middleware('throttle:invitations')->name('client-panel.invitations.store');
     Route::post('invitations/{invitation}/resend', [ClientPanelInvitationController::class, 'resend'])
         ->middleware('throttle:invitations')->name('client-panel.invitations.resend');
+    Route::get('me', [ClientPanelProfileController::class, 'show'])
+        ->middleware('throttle:api')->name('client-panel.me');
     Route::get('associates', [AssociateController::class, 'index'])
         ->middleware('throttle:api')->name('client-panel.associates.index');
     Route::post('associates/invite', [AssociateController::class, 'invite'])
@@ -149,6 +172,20 @@ Route::middleware(['auth:sanctum', 'client.user'])->prefix('client-panel/v1')->g
         Route::post('events/{event}/media', [EventMediaController::class, 'store'])->name('client-panel.events.media.store');
         Route::patch('events/{event}/media/reorder', [EventMediaController::class, 'reorder'])->name('client-panel.events.media.reorder');
         Route::delete('events/{event}/media/{media}', [EventMediaController::class, 'destroy'])->name('client-panel.events.media.destroy');
+
+        // Experiencias de su portal (docs/experiences-plan.md): lo propio, y
+        // las consultas que entran por ellas y por su padrón.
+        Route::get('experiences', [ClientPanelExperienceController::class, 'index'])->name('client-panel.experiences.index');
+        Route::post('experiences', [ClientPanelExperienceController::class, 'store'])->name('client-panel.experiences.store');
+        Route::get('experiences/{experience}', [ClientPanelExperienceController::class, 'show'])->name('client-panel.experiences.show');
+        Route::match(['put', 'patch'], 'experiences/{experience}', [ClientPanelExperienceController::class, 'update'])->name('client-panel.experiences.update');
+        Route::delete('experiences/{experience}', [ClientPanelExperienceController::class, 'destroy'])->name('client-panel.experiences.destroy');
+        Route::post('experiences/{experience}/media', [ExperienceMediaController::class, 'store'])->name('client-panel.experiences.media.store');
+        Route::patch('experiences/{experience}/media/reorder', [ExperienceMediaController::class, 'reorder'])->name('client-panel.experiences.media.reorder');
+        Route::delete('experiences/{experience}/media/{media}', [ExperienceMediaController::class, 'destroy'])->name('client-panel.experiences.media.destroy');
+
+        Route::get('inquiries', [ClientPanelInquiryController::class, 'index'])->name('client-panel.inquiries.index');
+        Route::patch('inquiries/{inquiry}', [ClientPanelInquiryController::class, 'update'])->name('client-panel.inquiries.update');
     });
 });
 
@@ -203,6 +240,10 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::get('accommodations/{accommodation}/nearby-events', [AccommodationNearbyEventController::class, 'index'])
                 ->name('admin.accommodations.nearby-events.index');
 
+            // Categorías de experiencias: lectura abierta (selectores del CRM y del
+            // portal). Las experiencias en sí son por client y van en `platform`.
+            Route::get('experience-categories', [ExperienceCategoryController::class, 'index'])->name('admin.experience-categories.index');
+
             Route::get('accommodation-types', [AccommodationTypeController::class, 'index'])->name('admin.accommodation-types.index');
             Route::get('accommodation-types/{type}', [AccommodationTypeController::class, 'show'])->name('admin.accommodation-types.show');
             Route::post('accommodation-types', [AccommodationTypeController::class, 'store'])->name('admin.accommodation-types.store');
@@ -237,6 +278,12 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::get('accommodations/{accommodation}/sharing', [AccommodationDocumentController::class, 'sharing'])->name('admin.accommodations.sharing');
             Route::post('accommodations/{accommodation}/documents/{document}/shares', [AccommodationDocumentController::class, 'share'])->name('admin.accommodations.documents.share');
             Route::delete('accommodations/{accommodation}/documents/{document}/shares/{clientId}', [AccommodationDocumentController::class, 'unshare'])->name('admin.accommodations.documents.unshare');
+
+            // API keys del asistente del alojamiento (lado dueño). Ver
+            // docs/accommodation-mcp-plan.md, fase 1.
+            Route::get('accommodations/{accommodation}/api-keys', [AccommodationApiKeyController::class, 'index'])->name('admin.accommodations.api-keys.index');
+            Route::post('accommodations/{accommodation}/api-keys', [AccommodationApiKeyController::class, 'store'])->name('admin.accommodations.api-keys.store');
+            Route::delete('accommodations/{accommodation}/api-keys/{key}', [AccommodationApiKeyController::class, 'destroy'])->name('admin.accommodations.api-keys.destroy');
 
             // Gestión de clients B2B y sus API keys — solo plataforma (F4).
             Route::middleware('platform')->group(function () {
@@ -307,6 +354,18 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
                 Route::post('events/{event}/media', [EventMediaController::class, 'store'])->name('admin.events.media.store');
                 Route::patch('events/{event}/media/reorder', [EventMediaController::class, 'reorder'])->name('admin.events.media.reorder');
                 Route::delete('events/{event}/media/{media}', [EventMediaController::class, 'destroy'])->name('admin.events.media.destroy');
+
+                // Experiencias (docs/experiences-plan.md). El catálogo es por
+                // client, así que hasta la lectura es del staff; el client lee
+                // y escribe lo suyo por client-panel/v1.
+                Route::get('experiences', [ExperienceController::class, 'index'])->name('admin.experiences.index');
+                Route::post('experiences', [ExperienceController::class, 'store'])->name('admin.experiences.store');
+                Route::get('experiences/{experience}', [ExperienceController::class, 'show'])->name('admin.experiences.show');
+                Route::match(['put', 'patch'], 'experiences/{experience}', [ExperienceController::class, 'update'])->name('admin.experiences.update');
+                Route::delete('experiences/{experience}', [ExperienceController::class, 'destroy'])->name('admin.experiences.destroy');
+                Route::post('experiences/{experience}/media', [ExperienceMediaController::class, 'store'])->name('admin.experiences.media.store');
+                Route::patch('experiences/{experience}/media/reorder', [ExperienceMediaController::class, 'reorder'])->name('admin.experiences.media.reorder');
+                Route::delete('experiences/{experience}/media/{media}', [ExperienceMediaController::class, 'destroy'])->name('admin.experiences.media.destroy');
             });
         });
     });

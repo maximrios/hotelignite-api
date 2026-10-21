@@ -15,6 +15,10 @@ return [
     // Rate limit por defecto (requests/minuto) para un client sin tier propio.
     'client_default_rpm' => (int) env('API_CLIENT_DEFAULT_RPM', 60),
 
+    // Rate limit (requests/minuto) de una API key de alojamiento: el agente que
+    // contesta por él (docs/accommodation-mcp-plan.md). Fijo hasta que se cobre IA.
+    'accommodation_default_rpm' => (int) env('API_ACCOMMODATION_DEFAULT_RPM', 60),
+
     /*
     |--------------------------------------------------------------------------
     | Invitaciones (alta de asociados)
@@ -28,6 +32,17 @@ return [
     // Vencimiento del token de invitación. 30 días: un padrón municipal tarda
     // semanas, y el costo de acortarlo son reenvíos (§5 de la skill).
     'invitation_expiration_days' => (int) env('API_INVITATION_EXPIRATION_DAYS', 30),
+
+    // Portal de clients: ahí aterriza el link de confirmación de email del
+    // registro de agencias (`/verificar`). Sin barra final.
+    'clients_portal_url' => rtrim((string) env('CLIENTS_PORTAL_URL', 'http://client.hotelignite.local:3003'), '/'),
+
+    // PMS de los hoteleros: ahí aterriza el link del aviso de consulta nueva
+    // (`/consultas`). Sin barra final.
+    'pms_url' => rtrim((string) env('PMS_URL', 'http://pms.hotelignite.local:3000'), '/'),
+
+    // Vencimiento del link de confirmación de email del registro, en horas.
+    'signup_verification_hours' => (int) env('API_SIGNUP_VERIFICATION_HOURS', 48),
 
     // Si el hotelero rechaza el vínculo, el mismo client no puede volver a
     // invitarlo por este plazo. Es la defensa contra el spam a los hoteleros.

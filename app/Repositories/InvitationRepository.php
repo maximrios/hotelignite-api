@@ -474,6 +474,8 @@ class InvitationRepository implements InvitationInterface
         return [
             'client_type' => $client->type,
             'vocabulary' => $client->relationshipVocabulary(),
+            // Una agencia que se registró sola no invita hasta que el staff la verifica.
+            'can_invite' => ! $client->needsVerification(),
             'counts' => collect(self::STATES)->mapWithKeys(fn (string $s) => [$s => (int) ($counts[$s] ?? 0)])
                 ->put('total', (int) $counts->sum()),
             'associates' => [

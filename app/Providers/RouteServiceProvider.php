@@ -80,6 +80,20 @@ class RouteServiceProvider extends ServiceProvider
             });
         });
 
+        // Agente que contesta por un alojamiento: límite por alojamiento, no por
+        // key (rotar keys no multiplica el cupo). `auth.accommodation` deja el
+        // alojamiento en los attributes antes de que corra el throttle.
+        RateLimiter::for('accommodation', function (Request $request) {
+            $accommodation = $request->attributes->get('api_accommodation');
+            $key = $accommodation ? "accommodation:{$accommodation->id}" : $request->ip();
+
+            return Limit::perMinute((int) config('api.accommodation_default_rpm', 60))->by($key)->response(function () {
+                return response()->json([
+                    'message' => 'Límite de peticiones excedido. Demasiadas requests.',
+                ], 429);
+            });
+        });
+
         // Emisión de invitaciones: freno anti-abuso por usuario de client. Alto
         // a propósito (§10 de la skill) — un lote de 500 emails es UNA request.
         RateLimiter::for('invitations', function (Request $request) {
@@ -100,6 +114,26 @@ class RouteServiceProvider extends ServiceProvider
                     'message' => 'Demasiadas peticiones. Probá de nuevo en un minuto.',
                 ], 429);
             });
+        });
+
+        // Registro de agencias: público y crea clients, así que el freno es por IP
+        // y bajo. Un humano se registra una vez; un bot, mil.
+        RateLimiter::for('signup', function (Request $request) {
+            return [
+                Limit::perMinute(3)->by('signup-min|'.$request->ip()),
+                Limit::perHour(10)->by('signup-hour|'.$request->ip()),
+            ];
+        });
+
+        // Reenvío del mail de confirmación: freno propio, para que equivocarse al
+        // registrarse no deje sin poder pedir el mail. Por email + IP.
+        RateLimiter::for('signup-resend', function (Request $request) {
+            $key = strtolower((string) $request->input('email')).'|'.$request->ip();
+
+            return [
+                Limit::perMinute(2)->by('resend-min|'.$key),
+                Limit::perHour(6)->by('resend-hour|'.$key),
+            ];
         });
 
         // Login: límite estricto anti-fuerza-bruta, por email + IP.

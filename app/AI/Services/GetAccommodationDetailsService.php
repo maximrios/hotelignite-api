@@ -38,6 +38,35 @@ final class GetAccommodationDetailsService
             throw new AiToolException("No encontré el alojamiento \"{$slug}\". Usá search_accommodations para obtener el slug correcto.");
         }
 
+        return $this->render($ctx, $accommodation);
+    }
+
+    /**
+     * La ficha del alojamiento fijado en el contexto (MCP del alojamiento). Igual
+     * pasa por `visibleTo`: la key puede haber perdido el alojamiento a mitad de
+     * la sesión.
+     *
+     * @return array<string, mixed>
+     */
+    public function handleCurrent(AiContext $ctx): array
+    {
+        $accommodation = $ctx->accommodation === null ? null : Accommodation::visibleTo($ctx->actor)
+            ->where('enabled', 1)
+            ->with([...AccommodationMapper::EAGER, 'roomTypes.descriptions'])
+            ->find($ctx->accommodation->id);
+
+        if ($accommodation === null) {
+            throw new AiToolException('El alojamiento no está disponible.');
+        }
+
+        return $this->render($ctx, $accommodation);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function render(AiContext $ctx, Accommodation $accommodation): array
+    {
         $text = AccommodationMapper::fullDescription($accommodation, $ctx->language);
 
         return [

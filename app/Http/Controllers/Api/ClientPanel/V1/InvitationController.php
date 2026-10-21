@@ -15,12 +15,12 @@ use Illuminate\Routing\Controller as BaseController;
  */
 class InvitationController extends BaseController
 {
-    public function __construct(private InvitationInterface $invitations)
-    {
-    }
+    public function __construct(private InvitationInterface $invitations) {}
 
     public function store(StoreInvitationRequest $request): JsonResponse
     {
+        AssociateController::assertCanInvite($request->user()->client);
+
         $result = $this->invitations->emit(
             $request->user()->client_id,
             $request->user(),
@@ -34,6 +34,7 @@ class InvitationController extends BaseController
     {
         // Un client solo puede reenviar sus propias invitaciones.
         abort_if($invitation->client_id !== $request->user()->client_id, 403, 'No autorizado.');
+        AssociateController::assertCanInvite($request->user()->client);
 
         $this->invitations->resend($invitation, $request->user());
 

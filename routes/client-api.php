@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\Client\AccommodationController;
 use App\Http\Controllers\Api\Client\BookingController;
 use App\Http\Controllers\Api\Client\CatalogController;
+use App\Http\Controllers\Api\Client\ExperienceController;
+use App\Http\Controllers\Api\Client\InquiryController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -27,12 +29,24 @@ Route::middleware(['json.response', 'auth.client', 'throttle:client'])->group(fu
     Route::get('accommodations/{id}/availability', [AccommodationController::class, 'availability'])->name('client.accommodations.availability');
     Route::get('accommodations/{slug}/nearby-points', [AccommodationController::class, 'nearbyPoints'])->name('client.accommodations.nearby-points');
 
+    // Experiencias del portal: sólo las del client de la key y publicadas
+    // (docs/experiences-plan.md).
+    Route::get('experiences', [ExperienceController::class, 'index'])->name('client.experiences.index');
+    Route::get('experiences/{slug}', [ExperienceController::class, 'show'])->name('client.experiences.show');
+
     // Datos de referencia (catálogos compartidos)
     Route::get('cities', [CatalogController::class, 'cities'])->name('client.cities.index');
     Route::get('cities/{slug}', [CatalogController::class, 'city'])->name('client.cities.show');
+    // Legacy: lo reemplazan las experiencias. Se borra cuando turinorte deje de usarlo.
     Route::get('tours', [CatalogController::class, 'tours'])->name('client.tours.index');
     Route::get('services', [CatalogController::class, 'services'])->name('client.services.index');
     Route::get('accommodation-types', [CatalogController::class, 'accommodationTypes'])->name('client.accommodation-types.index');
+
+    // Consulta de un viajero sobre un alojamiento o una experiencia del portal
+    // (requiere ability inquiry:create). Ver docs/experiences-plan.md.
+    Route::post('inquiries', [InquiryController::class, 'store'])
+        ->middleware('client.ability:inquiry:create')
+        ->name('client.inquiries.store');
 
     // Pre-reserva (requiere ability booking:create)
     Route::post('bookings', [BookingController::class, 'store'])

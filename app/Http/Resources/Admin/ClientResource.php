@@ -25,6 +25,11 @@ class ClientResource extends JsonResource
             'legal_name' => $this->legal_name,
             'tax_id' => $this->tax_id,
             'iva_condition' => $this->iva_condition,
+            'license_number' => $this->license_number,
+            // `signup` = se registró solo en el portal; necesita la verificación del staff.
+            'origin' => $this->origin,
+            'verified_at' => $this->verified_at,
+            'needs_verification' => $this->needsVerification(),
             'accommodations_count' => $this->whenCounted('accommodations'),
             'accommodations' => $this->whenLoaded('accommodations', fn () => $this->accommodations->map(fn ($a) => [
                 'id' => $a->id,

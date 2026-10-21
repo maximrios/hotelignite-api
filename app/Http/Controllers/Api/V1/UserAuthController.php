@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -22,6 +23,18 @@ class UserAuthController extends Controller
         }
 
         $user = Auth::user();
+
+        // Una agencia que se registró sola entra recién con el email confirmado.
+        // A los users que dio de alta el staff no se les exige: los cargó alguien
+        // que ya los conoce, y muchos tienen `email_verified_at` en null.
+        if ($user->isClient()
+            && $user->email_verified_at === null
+            && $user->client?->origin === Client::ORIGIN_SIGNUP) {
+            return response()->json([
+                'message' => 'Confirmá tu email para entrar. Te mandamos el enlace cuando te registraste.',
+                'code' => 'email_unverified',
+            ], 403);
+        }
 
         // Abilities por tipo (defensa en profundidad; la autorización real la
         // hacen las Policies). Los clients son de solo lectura.

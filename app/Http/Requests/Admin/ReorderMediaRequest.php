@@ -6,15 +6,15 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class ReorderMediaRequest extends FormRequest
 {
-    /** Dueño del evento antes que validación (staff: todos; client: los suyos). */
+    /** Dueño del evento o la experiencia antes que validación (staff: todos; client: los suyos). */
     public function authorize(): bool
     {
-        $event = $this->route('event');
+        $owner = $this->route('event') ?? $this->route('experience');
 
-        return $event !== null && $this->user()?->can('update', $event) === true;
+        return $owner !== null && $this->user()?->can('update', $owner) === true;
     }
 
-    /** `ids` en el orden nuevo. Tienen que ser exactamente los del evento (lo chequea el repositorio). */
+    /** `ids` en el orden nuevo. Tienen que ser exactamente los de la galería (lo chequea el repositorio). */
     public function rules(): array
     {
         return [

@@ -13,12 +13,12 @@ use Illuminate\Validation\Validator;
  */
 class StoreMediaRequest extends FormRequest
 {
-    /** Dueño del evento antes que validación (staff: todos; client: los suyos). */
+    /** Dueño del evento o la experiencia antes que validación (staff: todos; client: los suyos). */
     public function authorize(): bool
     {
-        $event = $this->route('event');
+        $owner = $this->route('event') ?? $this->route('experience');
 
-        return $event !== null && $this->user()?->can('update', $event) === true;
+        return $owner !== null && $this->user()?->can('update', $owner) === true;
     }
 
     public function rules(): array

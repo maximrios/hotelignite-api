@@ -28,6 +28,10 @@ class UpdateClientRequest extends FormRequest
             'legal_name' => ['nullable', 'string', 'max:255'],
             'tax_id' => ['nullable', 'string', 'max:20'],
             'iva_condition' => ['nullable', 'string', 'max:40'],
+            // Legajo de agencia de viajes (Ley 18.829). Lo pide la verificación.
+            'license_number' => ['nullable', 'string', 'max:50'],
+            // El staff revisó la agencia (CUIT y legajo). Sólo pesa en las que se registraron solas.
+            'verified' => ['sometimes', 'boolean'],
         ];
     }
 }

@@ -81,15 +81,13 @@ class BillingRepository implements BillingInterface
 
     public function plansFor(Client $client): Collection
     {
-        $sells = $client->type === Client::TYPE_AGENCY;
-
         return Plan::forAudience(Plan::AUDIENCE_CLIENT)
             ->where('enabled', true)
             ->where('is_public', true)
             ->with('features')
             ->orderBy('sort_order')
             ->get()
-            ->filter(fn (Plan $plan) => $client->type === Client::TYPE_COMPANY || $plan->hasFeature('sales') === $sells)
+            ->filter(fn (Plan $plan) => $plan->offeredTo($client->type))
             ->values();
     }
 

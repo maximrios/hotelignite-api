@@ -26,6 +26,7 @@ class PlanFeatureSeeder extends Seeder
         $starter = array_merge($free, [
             'booking_engine' => null, 'rate_management' => null,
             'promotions' => null, 'payment_gateway' => null,
+            'ai_assistant' => null,
             'users' => 3,
         ]);
 

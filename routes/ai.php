@@ -1,5 +1,6 @@
 <?php
 
+use App\Mcp\Servers\AccommodationServer;
 use App\Mcp\Servers\TravelerServer;
 use Laravel\Mcp\Facades\Mcp;
 
@@ -18,3 +19,9 @@ use Laravel\Mcp\Facades\Mcp;
 Mcp::web('/mcp/traveler', TravelerServer::class)
     ->middleware(['auth.client', 'throttle:client', 'client.ability:mcp:read'])
     ->name('mcp.traveler');
+
+// MCP del alojamiento: un agente contesta en nombre de UN alojamiento, el de la
+// API key (`ak_live_…`, emitida desde el PMS). Ver docs/accommodation-mcp-plan.md.
+Mcp::web('/mcp/accommodation', AccommodationServer::class)
+    ->middleware(['auth.accommodation', 'throttle:accommodation', 'accommodation.ability:mcp:read'])
+    ->name('mcp.accommodation');
