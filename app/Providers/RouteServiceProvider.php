@@ -136,6 +136,15 @@ class RouteServiceProvider extends ServiceProvider
             ];
         });
 
+        // Formulario de la landing (empezar gratis / demo): público y anónimo.
+        // Mismo criterio que el registro: un humano lo manda una vez.
+        RateLimiter::for('leads', function (Request $request) {
+            return [
+                Limit::perMinute(3)->by('leads-min|'.$request->ip()),
+                Limit::perHour(10)->by('leads-hour|'.$request->ip()),
+            ];
+        });
+
         // Login: límite estricto anti-fuerza-bruta, por email + IP.
         RateLimiter::for('login', function (Request $request) {
             $key = strtolower((string) $request->input('email')).'|'.$request->ip();

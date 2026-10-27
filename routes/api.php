@@ -55,6 +55,7 @@ use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\ChannelController;
 use App\Http\Controllers\Api\V1\CityController as WebCityController;
 use App\Http\Controllers\Api\V1\InquiryController;
+use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\PlanController;
 use App\Http\Controllers\Api\V1\PolicyController;
 use App\Http\Controllers\Api\V1\RateController;
@@ -107,6 +108,12 @@ Route::prefix('v1/invitations')->middleware('throttle:invitations-public')->grou
     Route::post('{token}/accept', [PublicInvitationController::class, 'accept'])->name('invitations.accept');
     Route::post('{token}/decline', [PublicInvitationController::class, 'decline'])->name('invitations.decline');
 });
+
+/*
+| Leads de la landing pública (`web/`): "Empezá gratis" y "Pedí una demo". No
+| crea cuentas; el staff hace el alta asistida. Ver `LeadController`.
+*/
+Route::post('v1/leads', [LeadController::class, 'store'])->middleware('throttle:leads')->name('leads.store');
 
 /*
 | Registro de agencias en el portal de clients. Público: crea un client (plan

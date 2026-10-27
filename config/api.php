@@ -65,6 +65,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Leads de la landing
+    |--------------------------------------------------------------------------
+    |
+    | Casilla del staff que recibe el aviso de cada "Empezá gratis" / "Pedí una
+    | demo". Vacía → el lead se guarda igual, sin aviso.
+    |
+    */
+    'leads_notify_email' => trim((string) env('API_LEADS_NOTIFY_EMAIL', '')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Catálogos geográficos del panel
     |--------------------------------------------------------------------------
     |
