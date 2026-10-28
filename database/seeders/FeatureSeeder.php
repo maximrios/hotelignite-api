@@ -36,6 +36,8 @@ class FeatureSeeder extends Seeder
             ['slug' => 'front_desk',         'name' => 'Recepción / check-in',         'module' => 'operations',   'type' => 'boolean'],
             ['slug' => 'pms_reports',        'name' => 'Reportes (ADR / RevPAR)',      'module' => 'operations',   'type' => 'boolean'],
             ['slug' => 'cash_register',      'name' => 'Caja y cobros',                'module' => 'operations',   'type' => 'boolean'],
+            ['slug' => 'housekeeping',       'name' => 'Housekeeping',                 'module' => 'operations',   'type' => 'boolean'],
+            ['slug' => 'rooms',              'name' => 'Habitaciones',                 'module' => 'operations',   'type' => 'limit'],
 
             // billing — facturación y fiscal (AR)
             ['slug' => 'invoicing_arca',     'name' => 'Facturación ARCA',             'module' => 'billing',      'type' => 'boolean'],
@@ -46,7 +48,8 @@ class FeatureSeeder extends Seeder
             ['slug' => 'accommodations',     'name' => 'Propiedades por cuenta',       'module' => 'platform',     'type' => 'limit'],
             ['slug' => 'channels_connected', 'name' => 'Canales conectados',           'module' => 'platform',     'type' => 'limit'],
             ['slug' => 'api_access',         'name' => 'Acceso a la API / webhooks',   'module' => 'platform',     'type' => 'boolean'],
-            ['slug' => 'ai_assistant',       'name' => 'Asistente con IA para huéspedes', 'module' => 'platform', 'type' => 'boolean'],
+            // El límite es la cantidad de créditos de IA incluidos por mes.
+            ['slug' => 'ai_assistant',       'name' => 'Asistente con IA',             'module' => 'platform',     'type' => 'limit'],
         ];
 
         foreach ($features as $feature) {

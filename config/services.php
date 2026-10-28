@@ -36,4 +36,15 @@ return [
         'secret_key' => env('TURNSTILE_SECRET_KEY'),
     ],
 
+    // Cobro de los planes del PMS con suscripciones (preapproval) de Mercado Pago.
+    // `subscription_back_url`: adonde vuelve el hotelero desde Mercado Pago (la
+    // pantalla de facturación del PMS; https en producción).
+    'mercadopago' => [
+        'access_token' => env('MP_ACCESS_TOKEN'),
+        'webhook_secret' => env('MP_WEBHOOK_SECRET'),
+        'subscription_back_url' => env('MP_SUBSCRIPTION_BACK_URL', 'https://pms.hotelignite.com/facturacion'),
+        // Sólo pruebas: el comprador de prueba que paga en lugar del email del hotelero.
+        'test_payer_email' => env('MP_TEST_PAYER_EMAIL'),
+    ],
+
 ];

@@ -218,7 +218,11 @@ final class CheckAvailabilityService
 
         if ($realIds !== []) {
             $rate = Rate::query()
-                ->whereHas('ratePlan', fn ($q) => $q->whereIn('room_type_id', $realIds)->where('enabled', true))
+                // Precio por tipo y día (rates.room_type_id; los planes legacy lo
+                // completan al crear la fila).
+                ->whereIn('room_type_id', $realIds)
+                ->whereHas('ratePlan', fn ($q) => $q->where('enabled', true))
+                ->where('stop_sell', false)
                 ->whereBetween('date', [$from->toDateString(), $to->subDay()->toDateString()])
                 ->orderBy('price')
                 ->first(['price', 'currency']);

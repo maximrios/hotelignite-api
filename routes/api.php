@@ -23,6 +23,7 @@ use App\Http\Controllers\Api\Admin\V1\ExperienceCategoryController;
 use App\Http\Controllers\Api\Admin\V1\ExperienceController;
 use App\Http\Controllers\Api\Admin\V1\ExperienceMediaController;
 use App\Http\Controllers\Api\Admin\V1\IncomingInvitationController;
+use App\Http\Controllers\Api\Admin\V1\PlanChangeRequestController;
 use App\Http\Controllers\Api\Admin\V1\PlanController as AdminPlanController;
 use App\Http\Controllers\Api\Admin\V1\PoiCategoryController;
 use App\Http\Controllers\Api\Admin\V1\PointOfInterestController;
@@ -42,6 +43,8 @@ use App\Http\Controllers\Api\ClientPanel\V1\ProfileController as ClientPanelProf
 use App\Http\Controllers\Api\ClientPanel\V1\SignupController;
 use App\Http\Controllers\Api\Invitations\PublicInvitationController;
 use App\Http\Controllers\Api\V1\AccommodationAvailabilityController;
+use App\Http\Controllers\Api\V1\AccommodationBillingController;
+use App\Http\Controllers\Api\V1\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\V1\AccommodationController as WebAccommodationController;
 use App\Http\Controllers\Api\V1\AccommodationDescriptionController;
 use App\Http\Controllers\Api\V1\AccommodationPolicyController;
@@ -54,10 +57,13 @@ use App\Http\Controllers\Api\V1\AccountTypeController;
 use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\ChannelController;
 use App\Http\Controllers\Api\V1\CityController as WebCityController;
+use App\Http\Controllers\Api\V1\HousekeepingController;
 use App\Http\Controllers\Api\V1\InquiryController;
+use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\LeadController;
 use App\Http\Controllers\Api\V1\PlanController;
 use App\Http\Controllers\Api\V1\PolicyController;
+use App\Http\Controllers\Api\V1\PricingController;
 use App\Http\Controllers\Api\V1\RateController;
 use App\Http\Controllers\Api\V1\RatePlanController;
 use App\Http\Controllers\Api\V1\ReservationController;
@@ -71,6 +77,7 @@ use App\Http\Controllers\Api\V1\ServiceController as WebServiceController;
 use App\Http\Controllers\Api\V1\StateController as WebStateController;
 use App\Http\Controllers\Api\V1\TourController;
 use App\Http\Controllers\Api\V1\TravelAgencyController;
+use App\Http\Controllers\Api\V1\TravelerController;
 use App\Http\Controllers\Api\V1\UserAuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -114,6 +121,14 @@ Route::prefix('v1/invitations')->middleware('throttle:invitations-public')->grou
 | crea cuentas; el staff hace el alta asistida. Ver `LeadController`.
 */
 Route::post('v1/leads', [LeadController::class, 'store'])->middleware('throttle:leads')->name('leads.store');
+
+/*
+| Webhooks de Mercado Pago (suscripciones de los planes del PMS). Público: la
+| firma HMAC `x-signature` es la autenticación. Ver `MercadoPagoWebhookController`.
+*/
+Route::post('v1/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])
+    ->middleware('throttle:120,1')
+    ->name('mercadopago.webhook');
 
 /*
 | Registro de agencias en el portal de clients. Público: crea un client (plan
@@ -296,6 +311,11 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::middleware('platform')->group(function () {
                 Route::patch('plans/{plan}', [AdminPlanController::class, 'update'])->name('admin.plans.update');
 
+                // Pedidos de cambio de plan de los hoteleros (confirmación manual hasta Mercado Pago).
+                Route::get('plan-requests', [PlanChangeRequestController::class, 'index'])->name('admin.plan-requests.index');
+                Route::post('plan-requests/{id}/approve', [PlanChangeRequestController::class, 'approve'])->whereNumber('id')->name('admin.plan-requests.approve');
+                Route::post('plan-requests/{id}/reject', [PlanChangeRequestController::class, 'reject'])->whereNumber('id')->name('admin.plan-requests.reject');
+
                 Route::get('clients', [ClientController::class, 'index'])->name('admin.clients.index');
                 Route::post('clients', [ClientController::class, 'store'])->name('admin.clients.store');
                 Route::get('clients/{client}', [ClientController::class, 'show'])->name('admin.clients.show');
@@ -471,6 +491,71 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
         Route::get('bookings', [BookingController::class, 'index'])->name('bookings.index');
 
         Route::get('reservations', [ReservationController::class, 'index'])->name('reservations.index');
+        Route::post('reservations', [ReservationController::class, 'store'])->name('reservations.store');
+        Route::get('reservations/quote', [ReservationController::class, 'quote'])->name('reservations.quote');
+        Route::get('guests/lookup', [ReservationController::class, 'guestLookup'])->name('guests.lookup');
+        // Parte de viajeros: registro de pasajeros y directorio de huéspedes.
+        Route::get('travelers', [TravelerController::class, 'registry'])->name('travelers.registry');
+        Route::get('guests', [TravelerController::class, 'guests'])->name('guests.index');
+        Route::get('guests/{id}', [TravelerController::class, 'guest'])->whereNumber('id')->name('guests.show');
+        Route::get('reservations/{id}', [ReservationController::class, 'show'])->whereUuid('id')->name('reservations.show');
+        Route::put('reservations/{id}/travelers', [ReservationController::class, 'updateTravelers'])->name('reservations.travelers');
+        Route::patch('reservations/{id}', [ReservationController::class, 'update'])->name('reservations.update');
+        Route::post('reservations/{id}/cancel', [ReservationController::class, 'cancel'])->name('reservations.cancel');
+        // Recepción. DELETE deshace el hecho registrado (error de mostrador).
+        Route::post('reservations/{id}/check-in', [ReservationController::class, 'checkIn'])->name('reservations.check-in');
+        Route::delete('reservations/{id}/check-in', [ReservationController::class, 'undoCheckIn'])->name('reservations.check-in.undo');
+        Route::post('reservations/{id}/check-out', [ReservationController::class, 'checkOut'])->name('reservations.check-out');
+        Route::delete('reservations/{id}/check-out', [ReservationController::class, 'undoCheckOut'])->name('reservations.check-out.undo');
+        Route::post('reservations/{id}/no-show', [ReservationController::class, 'noShow'])->name('reservations.no-show');
+        Route::delete('reservations/{id}/no-show', [ReservationController::class, 'undoNoShow'])->name('reservations.no-show.undo');
+
+        // Facturación del alojamiento y aceptaciones legales del PMS.
+        Route::get('billing', [AccommodationBillingController::class, 'summary'])->name('billing.summary');
+        Route::post('billing/plan-requests', [AccommodationBillingController::class, 'requestChange'])->name('billing.plan-requests.store');
+        Route::delete('billing/plan-requests/{id}', [AccommodationBillingController::class, 'cancelRequest'])->whereNumber('id')->name('billing.plan-requests.cancel');
+        Route::post('billing/subscriptions', [AccommodationBillingController::class, 'startCheckout'])->name('billing.subscriptions.store');
+        Route::post('billing/subscriptions/sync', [AccommodationBillingController::class, 'syncCheckout'])->name('billing.subscriptions.sync');
+        Route::get('legal/status', [AccommodationBillingController::class, 'legalStatus'])->name('legal.status');
+        Route::post('legal/accept', [AccommodationBillingController::class, 'acceptLegal'])->name('legal.accept');
+
+        // Inventario del PMS: tipos + habitaciones físicas (alta masiva, baja lógica).
+        Route::get('inventory', [InventoryController::class, 'show'])->name('inventory.show');
+        Route::post('inventory/room-types', [InventoryController::class, 'storeType'])->name('inventory.room-types.store');
+        Route::put('inventory/room-types/{id}', [InventoryController::class, 'updateType'])->whereNumber('id')->name('inventory.room-types.update');
+        Route::delete('inventory/room-types/{id}', [InventoryController::class, 'destroyType'])->whereNumber('id')->name('inventory.room-types.destroy');
+        Route::post('inventory/rooms', [InventoryController::class, 'storeRooms'])->name('inventory.rooms.store');
+        Route::patch('inventory/rooms/{id}', [InventoryController::class, 'updateRoom'])->whereNumber('id')->name('inventory.rooms.update');
+        Route::delete('inventory/rooms/{id}', [InventoryController::class, 'destroyRoom'])->whereNumber('id')->name('inventory.rooms.destroy');
+        Route::post('inventory/rooms/{id}/restore', [InventoryController::class, 'restoreRoom'])->whereNumber('id')->name('inventory.rooms.restore');
+
+        // Tarifas del PMS: grilla del plan base, edición masiva, ocupación y planes.
+        Route::get('pricing/grid', [PricingController::class, 'grid'])->name('pricing.grid');
+        Route::post('pricing/bulk', [PricingController::class, 'bulk'])->name('pricing.bulk');
+        Route::put('pricing/room-types/{id}', [PricingController::class, 'occupancy'])->whereNumber('id')->name('pricing.occupancy');
+        Route::post('pricing/plans', [PricingController::class, 'storePlan'])->name('pricing.plans.store');
+        Route::put('pricing/plans/{id}', [PricingController::class, 'updatePlan'])->whereNumber('id')->name('pricing.plans.update');
+        Route::delete('pricing/plans/{id}', [PricingController::class, 'destroyPlan'])->whereNumber('id')->name('pricing.plans.destroy');
+
+        // Housekeeping del PMS: tablero del día, tareas, personal sin login e historial.
+        Route::get('housekeeping', [HousekeepingController::class, 'board'])->name('housekeeping.board');
+        Route::put('housekeeping/settings', [HousekeepingController::class, 'updateSettings'])->name('housekeeping.settings');
+        Route::post('housekeeping/staff', [HousekeepingController::class, 'storeStaff'])->name('housekeeping.staff.store');
+        Route::patch('housekeeping/staff/{id}', [HousekeepingController::class, 'updateStaff'])->whereNumber('id')->name('housekeeping.staff.update');
+        Route::delete('housekeeping/staff/{id}', [HousekeepingController::class, 'destroyStaff'])->whereNumber('id')->name('housekeeping.staff.destroy');
+        Route::post('housekeeping/tasks', [HousekeepingController::class, 'storeTask'])->name('housekeeping.tasks.store');
+        Route::post('housekeeping/tasks/bulk-assign', [HousekeepingController::class, 'bulkAssign'])->name('housekeeping.tasks.bulk-assign');
+        Route::patch('housekeeping/tasks/{id}', [HousekeepingController::class, 'assignTask'])->whereNumber('id')->name('housekeeping.tasks.assign');
+        Route::post('housekeeping/tasks/{id}/start', [HousekeepingController::class, 'startTask'])->whereNumber('id')->name('housekeeping.tasks.start');
+        Route::post('housekeeping/tasks/{id}/finish', [HousekeepingController::class, 'finishTask'])->whereNumber('id')->name('housekeeping.tasks.finish');
+        Route::post('housekeeping/tasks/{id}/cancel', [HousekeepingController::class, 'cancelTask'])->whereNumber('id')->name('housekeeping.tasks.cancel');
+        Route::post('housekeeping/rooms/{id}/clean', [HousekeepingController::class, 'clean'])->whereNumber('id')->name('housekeeping.rooms.clean');
+        Route::post('housekeeping/rooms/{id}/inspect', [HousekeepingController::class, 'inspect'])->whereNumber('id')->name('housekeeping.rooms.inspect');
+        Route::post('housekeeping/rooms/{id}/dirty', [HousekeepingController::class, 'dirty'])->whereNumber('id')->name('housekeeping.rooms.dirty');
+        Route::post('housekeeping/rooms/{id}/problem', [HousekeepingController::class, 'problem'])->whereNumber('id')->name('housekeeping.rooms.problem');
+        Route::post('housekeeping/rooms/{id}/resolve', [HousekeepingController::class, 'resolve'])->whereNumber('id')->name('housekeeping.rooms.resolve');
+        Route::post('housekeeping/rooms/{id}/dnd', [HousekeepingController::class, 'dnd'])->whereNumber('id')->name('housekeeping.rooms.dnd');
+        Route::get('housekeeping/rooms/{id}/events', [HousekeepingController::class, 'events'])->whereNumber('id')->name('housekeeping.rooms.events');
 
         Route::get('rooms', [RoomController::class, 'index'])->name('rooms.index');
         Route::get('rooms/{id}', [RoomController::class, 'show'])->name('rooms.show');

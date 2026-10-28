@@ -2,6 +2,7 @@
 
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,3 +18,7 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Webhooks de Mercado Pago que fallaron. `schedule:run` lo corre el [program:scheduler]
+// de docker/supervisord.conf dentro del contenedor (no hay cron en el host).
+Schedule::command('mercadopago:retry-notifications')->everyFiveMinutes()->withoutOverlapping();

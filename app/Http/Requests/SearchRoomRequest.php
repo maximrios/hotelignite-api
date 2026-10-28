@@ -18,7 +18,8 @@ class SearchRoomRequest extends FormRequest
             'accommodation_id' => ['sometimes', 'integer', 'exists:accommodations,id'],
             'room_type_id' => ['sometimes', 'integer', 'exists:room_types,id'],
             'status' => ['sometimes', 'string', Rule::in(['available', 'occupied', 'maintenance', 'blocked', 'checkout'])],
-            'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            // El rack del PMS pide todas las habitaciones del alojamiento de una vez.
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:500'],
             'offset' => ['sometimes', 'integer', 'min:0'],
         ];
     }

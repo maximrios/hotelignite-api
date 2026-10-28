@@ -27,7 +27,9 @@ class RoomRepository implements RoomInterface
         $limit = $request->limit ?: 10;
         $offset = $request->offset ?: 0;
 
+        // Las dadas de baja (inventario del PMS) quedan fuera del rack y del cupo.
         $rooms = Room::visibleTo($this->tenant())
+            ->active()
             ->when($request->accommodation_id, function ($q, $accommodation_id) {
                 return $q->where('accommodation_id', $accommodation_id);
             })
@@ -60,7 +62,9 @@ class RoomRepository implements RoomInterface
     {
         $limit = $request->limit ?: 10;
 
+        // Las dadas de baja (inventario del PMS) quedan fuera del rack y del cupo.
         $rooms = Room::visibleTo($this->tenant())
+            ->active()
             ->when($request->accommodation_id, function ($q, $accommodation_id) {
                 return $q->where('accommodation_id', $accommodation_id);
             })
@@ -70,7 +74,7 @@ class RoomRepository implements RoomInterface
             ->when($request->status, function ($q, $status) {
                 return $q->where('status', $status);
             })
-            ->with(['roomType', 'accommodation'])
+            ->with(['roomType.descriptions', 'accommodation'])
             ->paginate($limit);
 
         return new RoomResourceCollection($rooms);

@@ -21,12 +21,16 @@ class Plan extends Model
         'audience',
         'price_provisional',
         'client_types',
+        'coming_soon',
     ];
 
     /** Plan de un alojamiento (hotelero) o de un client B2B. */
     public const AUDIENCE_ACCOMMODATION = 'accommodation';
 
     public const AUDIENCE_CLIENT = 'client';
+
+    /** Plan por defecto de todo alojamiento. */
+    public const FREE = 'free';
 
     protected $casts = [
         'price' => 'integer',
@@ -36,6 +40,7 @@ class Plan extends Model
         'enabled' => 'boolean',
         'price_provisional' => 'boolean',
         'client_types' => 'array',
+        'coming_soon' => 'boolean',
     ];
 
     /** ¿Se le ofrece a este tipo de client? `client_types` null = a todos. */

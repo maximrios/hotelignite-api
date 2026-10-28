@@ -9,6 +9,8 @@ class Payment extends Model
 {
     protected $fillable = [
         'subscription_id',
+        'payer_type',
+        'payer_id',
         'amount',
         'currency',
         'status',

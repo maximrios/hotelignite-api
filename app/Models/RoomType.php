@@ -19,7 +19,21 @@ class RoomType extends Model
         'accommodation_id',
         'category_id',
         'slug',
+        'code',
+        'max_adults',
+        'max_children',
+        'extra_adult_price',
+        'extra_child_price',
+        'single_use_discount',
     ];
+
+    /** Nombre en español (vive en `room_type_descriptions`); null si no tiene. */
+    public function spanishName(): ?string
+    {
+        $descriptions = $this->relationLoaded('descriptions') ? $this->descriptions : $this->descriptions()->get();
+
+        return ($descriptions->firstWhere('language_id', 'es') ?? $descriptions->first())?->name;
+    }
 
     public function accommodation()
     {

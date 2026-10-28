@@ -59,6 +59,9 @@ class AccommodationResource extends JsonResource
             'id' => $this->id,
             'account_id' => $this->account_id,
             'plan_id' => $this->plan_id,
+            // Plan y features: el PMS decide qué módulos mostrar (la API vuelve a validar).
+            'plan' => $this->whenLoaded('plan', fn () => $this->plan ? ['slug' => $this->plan->slug, 'name' => $this->plan->name] : null),
+            'features' => $this->whenLoaded('plan', fn () => $this->plan?->relationLoaded('features') ? $this->plan->features->pluck('slug')->values() : []),
             'slug' => $this->slug,
             'name' => $this->name,
             'legal_name' => $this->legal_name,

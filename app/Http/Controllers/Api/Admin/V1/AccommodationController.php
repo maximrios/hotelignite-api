@@ -27,7 +27,7 @@ class AccommodationController extends BaseController
         // Tope duro: sin él, `?limit=` pedía la tabla entera de una vez.
         $limit = min(max($request->integer('limit', 15), 1), self::MAX_LIMIT);
 
-        $accommodations = Accommodation::with(['city', 'state', 'type'])
+        $accommodations = Accommodation::with(['city', 'state', 'type', 'plan.features'])
             ->with($this->clientPivot($user))
             ->visibleTo($user)
             ->when($request->search, fn ($q, $search) => $q->whereLike('name', "%{$search}%"))

@@ -13,12 +13,15 @@ class PlanSeeder extends Seeder
      */
     public function run(): void
     {
+        // Escalera acordada con hotelería (2026-10-28). Los slugs se mantienen
+        // (otros sistemas los referencian); cambian nombre, precio y contenido.
+        // Premium queda "Próximamente" hasta que exista el channel manager.
         $plans = [
             [
                 'slug' => 'free',
                 'name' => 'Free',
-                'subtitle' => 'Tu hotel en el portal',
-                'description' => 'Cargá tu alojamiento y armá tu web dentro del portal, sin costo.',
+                'subtitle' => 'Inicio',
+                'description' => 'Tu hotel en el portal y la operación diaria: calendario, reservas y huéspedes, hasta 10 habitaciones.',
                 'price' => 0,
                 'currency' => 'ARS',
                 'billing_period' => 'free',
@@ -26,45 +29,49 @@ class PlanSeeder extends Seeder
                 'sort_order' => 1,
                 'is_public' => true,
                 'enabled' => true,
+                'coming_soon' => false,
             ],
             [
                 'slug' => 'starter',
-                'name' => 'Starter',
-                'subtitle' => 'Vendé directo',
-                'description' => 'Motor de reservas propio con cobros online y gestión de tarifas.',
-                'price' => 1500000,
+                'name' => 'Básico',
+                'subtitle' => 'Operación',
+                'description' => 'Todo el Free más tarifas completas, housekeeping y motor de reservas, hasta 25 habitaciones.',
+                'price' => 2500000,
                 'currency' => 'ARS',
                 'billing_period' => 'monthly',
                 'trial_days' => 14,
                 'sort_order' => 2,
                 'is_public' => true,
                 'enabled' => true,
+                'coming_soon' => false,
             ],
             [
                 'slug' => 'pro',
                 'name' => 'Pro',
-                'subtitle' => 'Distribuí y operá',
-                'description' => 'Channel manager multi-OTA + PMS para la operación diaria.',
-                'price' => 3900000,
+                'subtitle' => 'Pro IA',
+                'description' => 'Todo el Básico más el asistente con IA, reportes de ocupación y revenue, hasta 60 habitaciones.',
+                'price' => 5500000,
                 'currency' => 'ARS',
                 'billing_period' => 'monthly',
                 'trial_days' => 14,
                 'sort_order' => 3,
                 'is_public' => true,
                 'enabled' => true,
+                'coming_soon' => false,
             ],
             [
                 'slug' => 'enterprise',
-                'name' => 'Enterprise',
-                'subtitle' => 'Todo + fiscal AR',
-                'description' => 'Facturación ARCA, multipropiedad, acceso a la API y soporte dedicado.',
-                'price' => 6900000,
+                'name' => 'Premium',
+                'subtitle' => 'Distribución',
+                'description' => 'Todo el Pro más channel manager, habitaciones y usuarios ilimitados, API y facturación ARCA.',
+                'price' => 9900000,
                 'currency' => 'ARS',
                 'billing_period' => 'monthly',
                 'trial_days' => 0,
                 'sort_order' => 4,
                 'is_public' => true,
                 'enabled' => true,
+                'coming_soon' => true,
             ],
         ];
 
@@ -86,7 +93,7 @@ class PlanSeeder extends Seeder
      */
     private function migrateLegacyBasicPlan(): void
     {
-        $basicId   = DB::table('plans')->where('slug', 'basic')->value('id');
+        $basicId = DB::table('plans')->where('slug', 'basic')->value('id');
         $starterId = DB::table('plans')->where('slug', 'starter')->value('id');
 
         if (! $basicId || ! $starterId) {

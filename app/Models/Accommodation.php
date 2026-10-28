@@ -42,6 +42,7 @@ class Accommodation extends Model
         'active',
         'test',
         'expiration',
+        'housekeeping_requires_inspection',
     ];
 
     /**
@@ -57,6 +58,7 @@ class Accommodation extends Model
         'active' => 'boolean',
         'test' => 'boolean',
         'stars' => 'integer',
+        'housekeeping_requires_inspection' => 'boolean',
     ];
 
     /**
@@ -97,6 +99,13 @@ class Accommodation extends Model
 
     protected static function booted(): void
     {
+        // Todo alojamiento nace en el Free: no existe el estado "sin plan".
+        static::creating(function (Accommodation $accommodation) {
+            if ($accommodation->plan_id === null) {
+                $accommodation->plan_id = Plan::where('slug', Plan::FREE)->value('id');
+            }
+        });
+
         static::saving(function (Accommodation $accommodation) {
             $attributes = $accommodation->getAttributes();
             foreach (self::LEGACY_NOT_NULL_DEFAULTS as $column => $default) {
@@ -223,6 +232,52 @@ class Accommodation extends Model
     public function featureLimit(string $slug): ?int
     {
         return $this->plan?->featureLimit($slug);
+    }
+
+    public function subscriptions()
+    {
+        return $this->morphMany(Subscription::class, 'subscriber');
+    }
+
+    public function invoices()
+    {
+        return $this->morphMany(Invoice::class, 'payer');
+    }
+
+    public function aiCreditTransactions()
+    {
+        return $this->morphMany(AiCreditTransaction::class, 'owner');
+    }
+
+    public function planChangeRequests()
+    {
+        return $this->hasMany(PlanChangeRequest::class);
+    }
+
+    /** Habitaciones del Free: tope también para planes legacy sin la feature `rooms`. */
+    public const FREE_ROOM_LIMIT = 10;
+
+    /**
+     * Tope de habitaciones activas del plan (null = ilimitado). Un plan que no
+     * declara `rooms` (legacy) opera como el Free.
+     */
+    public function roomLimit(): ?int
+    {
+        if (! $this->hasFeature('rooms')) {
+            return self::FREE_ROOM_LIMIT;
+        }
+
+        return $this->featureLimit('rooms');
+    }
+
+    /** Corta con 403 si el plan no incluye el módulo (el PMS ofrece el upgrade). */
+    public function requireFeature(string $slug, string $module): void
+    {
+        abort_unless(
+            $this->hasFeature($slug),
+            403,
+            "{$module} no está incluido en tu plan. Podés cambiarlo desde Facturación."
+        );
     }
 
     /**
