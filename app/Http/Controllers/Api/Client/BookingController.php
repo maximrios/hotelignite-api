@@ -25,7 +25,7 @@ class BookingController extends BaseController
     public function store(StoreBookingRequest $request)
     {
         if ($request->filled('accommodation_id')) {
-            $visible = Accommodation::visibleTo($request->user())
+            $visible = Accommodation::publishedTo($request->user())
                 ->whereKey($request->accommodation_id)
                 ->exists();
 

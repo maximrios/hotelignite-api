@@ -26,7 +26,7 @@ class InquiryController extends BaseController
 
         $inquirable = isset($data['experience_id'])
             ? Experience::query()->ownedByClient($clientId)->published()->find($data['experience_id'])
-            : Accommodation::visibleTo($request->user())->find($data['accommodation_id']);
+            : Accommodation::publishedTo($request->user())->find($data['accommodation_id']);
 
         abort_if($inquirable === null, 404);
 

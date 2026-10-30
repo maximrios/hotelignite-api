@@ -176,6 +176,23 @@ class Accommodation extends Model
     }
 
     /**
+     * Lo que sale en la web de un client por su API key: visible para él y
+     * habilitado (`verified_at`, el "Habilitar" del portal). Distinto de
+     * `visibleTo`, que es lo que el client ve en su panel — ahí entra todo el
+     * padrón, publicado o no.
+     */
+    public function scopePublishedTo($query, User $user)
+    {
+        if (! $user->isClient()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereHas('clients', fn ($q) => $q->where('clients.id', $user->client_id)
+            ->where('accommodation_client.status', 'active')
+            ->whereNotNull('accommodation_client.verified_at'));
+    }
+
+    /**
      * Limita la consulta a los accommodations visibles para el usuario dado.
      * platform: todos · account: los de su cuenta · client: los relacionados.
      * Fail-closed: un user sin cuenta/cliente no ve nada.

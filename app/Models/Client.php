@@ -29,6 +29,16 @@ class Client extends Model
      */
     public const PURCHASE_ORDER_TYPES = [self::TYPE_GOVERNMENT, self::TYPE_CHAMBER];
 
+    /**
+     * Sólo publican en su web a quien aceptó el vínculo (socio, adherido): para
+     * ellos aparecer es lo que da la membresía. Una agencia no tiene esa palanca
+     * y publica a cualquiera con dueño.
+     */
+    public const AGREEMENT_TO_PUBLISH_TYPES = [self::TYPE_GOVERNMENT, self::TYPE_CHAMBER];
+
+    /** Llevan cuotas y cuenta corriente de sus socios (`member_ledger_entries`). */
+    public const MEMBERSHIP_DUES_TYPES = [self::TYPE_CHAMBER];
+
     /** Lo dio de alta el staff desde el CRM. */
     public const ORIGIN_STAFF = 'staff';
 
@@ -51,6 +61,8 @@ class Client extends Model
         'type',
         'channel_id',
         'email',
+        'logo_url',
+        'logo_public_id',
         'phone',
         'active',
         'rate_limit_per_minute',
@@ -91,6 +103,62 @@ class Client extends Model
     public function needsVerification(): bool
     {
         return $this->origin === self::ORIGIN_SIGNUP && $this->verified_at === null;
+    }
+
+    /**
+     * Logo listo para usar donde no se puede servir el original: Cloudinary lo
+     * convierte por URL (PNG, alto fijo, fondo transparente conservado). Gmail
+     * y Outlook no muestran SVG, por eso el mail nunca usa `logo_url` crudo.
+     * El alto es el doble del que se muestra, para pantallas retina.
+     */
+    public function logoUrl(int $height = 96): ?string
+    {
+        if (! $this->logo_url) {
+            return null;
+        }
+
+        return preg_replace(
+            '#/image/upload/#',
+            "/image/upload/f_png,h_{$height},c_fit,q_auto/",
+            $this->logo_url,
+            1
+        );
+    }
+
+    /** Iniciales para el monograma cuando no hay logo: "Cámara Hotelera de Salta" → "CH". */
+    public function initials(): string
+    {
+        $words = array_values(array_filter(
+            preg_split('/\s+/u', trim((string) $this->name)) ?: [],
+            fn (string $w) => mb_strlen($w) > 2,
+        ));
+
+        return mb_strtoupper(implode('', array_map(fn (string $w) => mb_substr($w, 0, 1), array_slice($words, 0, 2)))) ?: '·';
+    }
+
+    /**
+     * Marca del client para la doble marca (mail, PMS, portal). Un solo lugar,
+     * así las tres superficies muestran lo mismo.
+     *
+     * @return array{name: string, logo_url: ?string, initials: string}
+     */
+    public function brand(): array
+    {
+        return [
+            'name' => $this->name,
+            'logo_url' => $this->logoUrl(),
+            'initials' => $this->initials(),
+        ];
+    }
+
+    public function publishRequiresAgreement(): bool
+    {
+        return in_array($this->type, self::AGREEMENT_TO_PUBLISH_TYPES, true);
+    }
+
+    public function chargesMembershipDues(): bool
+    {
+        return in_array($this->type, self::MEMBERSHIP_DUES_TYPES, true);
     }
 
     public function verifiedBy()
@@ -183,18 +251,21 @@ class Client extends Model
                 'agreed' => 'Adherido',
                 'not_agreed' => 'Sin adherir',
                 'action' => 'Invitar a adherir',
+                'invite_subject' => ':client te invita a adherir',
                 'pitch' => ':client te invita a sumar :accommodation a su padrón de alojamientos.',
             ],
             self::TYPE_CHAMBER => [
                 'agreed' => 'Socio',
                 'not_agreed' => 'No socio',
                 'action' => 'Invitar a asociarse',
+                'invite_subject' => ':client te invita a asociarte',
                 'pitch' => ':client te invita a sumar :accommodation como socio de la cámara.',
             ],
             default => [
                 'agreed' => 'Con convenio',
                 'not_agreed' => 'Sin convenio',
                 'action' => 'Invitar a convenio',
+                'invite_subject' => ':client te propone un convenio',
                 'pitch' => ':client quiere trabajar con :accommodation y te propone un convenio.',
             ],
         };

@@ -11,7 +11,9 @@ use App\Models\Client;
 use App\Models\Invitation;
 use App\Models\Plan;
 use App\Models\User;
+use App\Repositories\Contracts\DuesInterface;
 use App\Repositories\Contracts\InvitationInterface;
+use App\Support\AssociateType;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -38,6 +40,8 @@ class InvitationRepository implements InvitationInterface
      * Publicar es otro eje (`verified_at`, el "Habilitar" del client).
      */
     public const STATES = ['borrador', 'invitado', 'sin_vinculo', 'vinculado', 'rechazado'];
+
+    public function __construct(private DuesInterface $dues) {}
 
     private const STATE_SQL = <<<'SQL'
         CASE
@@ -165,8 +169,15 @@ class InvitationRepository implements InvitationInterface
         return [
             'case' => $this->resolveCase($invitation),
             'status' => $invitation->statusLabel(),
+            // Si el email invitado ya tiene usuario. Decide si la landing pide
+            // registrarse o iniciar sesión: un borrador (claim) lo puede tomar
+            // alguien sin cuenta. No expone el email; sólo lo ve quien tiene el
+            // token, que es quien recibió el mail.
+            'has_account' => User::whereRaw('LOWER(email) = ?', [strtolower($invitation->email)])->exists(),
             'client_name' => $invitation->client?->name,
             'client_type' => $invitation->client?->type,
+            // Doble marca: el hotelero aterriza viendo lo mismo que vio en el mail.
+            'client_brand' => $invitation->client?->brand(),
             // La frase que cambia según quién invita ("te propone un convenio",
             // "como socio de la cámara"...). Null si invita el staff.
             'pitch' => $invitation->client?->invitationPitch($accommodationName),
@@ -328,6 +339,7 @@ class InvitationRepository implements InvitationInterface
                 'id' => $i->id,
                 'client_name' => $i->client?->name,
                 'client_type' => $i->client?->type,
+                'client_brand' => $i->client?->brand(),
                 'accommodation_id' => $i->accommodation_id,
                 'accommodation_name' => $i->accommodation?->name,
                 'pitch' => $i->client?->invitationPitch($i->accommodation?->name),
@@ -415,6 +427,21 @@ class InvitationRepository implements InvitationInterface
             ->groupBy(DB::raw($state))
             ->pluck('total', 'state');
 
+        $publishedCount = (clone $base)->where('ac.status', 'active')->whereNotNull('ac.verified_at')->count();
+
+        // Filtro por cuota: el estado se calcula en PHP (imputación FIFO), así que
+        // se resuelve a una lista de ids antes de paginar. Un padrón son cientos.
+        $duesFilter = $client->chargesMembershipDues() && in_array($filters['dues'] ?? null, [
+            DuesRepository::STATUS_NO_FEE, DuesRepository::STATUS_CURRENT, DuesRepository::STATUS_OWES, DuesRepository::STATUS_DELINQUENT, 'con_deuda',
+        ], true) ? $filters['dues'] : null;
+        $duesIds = null;
+        if ($duesFilter !== null) {
+            $memberIds = (clone $base)->where('ac.status', 'active')->whereNotNull('ac.agreed_at')->pluck('ac.accommodation_id')->map(fn ($id) => (int) $id)->all();
+            $duesIds = collect($this->dues->standing($client, AssociateType::ACCOMMODATION, $memberIds))
+                ->filter(fn (array $st) => $duesFilter === 'con_deuda' ? $st['overdue_count'] > 0 : $st['status'] === $duesFilter)
+                ->keys()->all();
+        }
+
         $perPage = min(max((int) ($filters['per_page'] ?? 50), 1), 100);
 
         $page = (clone $base)
@@ -429,22 +456,39 @@ class InvitationRepository implements InvitationInterface
             ->when(in_array($filters['state'] ?? null, self::STATES, true), fn ($q) => $q->whereRaw("{$state} = ?", [$filters['state']]))
             ->when($filters['search'] ?? null, fn ($q, $search) => $q->whereRaw('unaccent(a.name) ilike unaccent(?)', ['%'.$search.'%']))
             ->when($filters['city_id'] ?? null, fn ($q, $cityId) => $q->where('a.city_id', $cityId))
+            ->when($filters['published'] ?? false, fn ($q) => $q->where('ac.status', 'active')->whereNotNull('ac.verified_at'))
+            ->when($duesIds !== null, fn ($q) => $q->whereIn('ac.accommodation_id', $duesIds))
             ->orderBy('a.name')
             ->select([
                 'a.id as accommodation_id', 'a.name', 'a.slug', 'a.account_id', 'a.email',
-                'c.name as city', 'ac.agreed_at', 'ac.verified_at',
+                'c.name as city', 'ac.agreed_at', 'ac.verified_at', 'ac.status as pivot_status',
                 'i.id as invitation_id', 'i.expires_at as invitation_expires_at',
             ])
             ->selectRaw("{$state} as state")
             ->paginate($perPage, ['*'], 'page', max((int) ($filters['page'] ?? 1), 1));
 
+        $standing = $client->chargesMembershipDues()
+            ? $this->dues->standing($client, AssociateType::ACCOMMODATION, collect($page->items())->pluck('accommodation_id')->map(fn ($id) => (int) $id)->all())
+            : null;
+
         $associates = collect($page->items())->map(fn (object $row) => [
+            'entity_type' => AssociateType::ACCOMMODATION,
+            'entity_id' => $row->accommodation_id,
             'accommodation_id' => $row->accommodation_id,
             'name' => $row->name,
             'slug' => $row->slug,
             'city' => $row->city,
             'state' => $row->state,
             'published' => $row->verified_at !== null,
+            // Por qué no se puede habilitar (null = se puede). Mismas reglas que
+            // `PublicationRepository`; la UI no las re-deriva.
+            'publish_blocker' => match (true) {
+                $row->pivot_status !== 'active' => PublicationRepository::SKIP_REJECTED,
+                $row->account_id === null => PublicationRepository::SKIP_NO_OWNER,
+                $client->publishRequiresAgreement() && $row->agreed_at === null => PublicationRepository::SKIP_NOT_AGREED,
+                default => null,
+            },
+            'dues' => $standing === null || $row->agreed_at === null ? null : $standing[(int) $row->accommodation_id],
             'agreed_at' => $row->agreed_at,
             // Si se puede invitar sin pedirle un email al client. El email en sí
             // no se expone: con dueño, es el de su cuenta.
@@ -476,6 +520,9 @@ class InvitationRepository implements InvitationInterface
             'vocabulary' => $client->relationshipVocabulary(),
             // Una agencia que se registró sola no invita hasta que el staff la verifica.
             'can_invite' => ! $client->needsVerification(),
+            'publish_requires_agreement' => $client->publishRequiresAgreement(),
+            'charges_dues' => $client->chargesMembershipDues(),
+            'published_count' => $publishedCount,
             'counts' => collect(self::STATES)->mapWithKeys(fn (string $s) => [$s => (int) ($counts[$s] ?? 0)])
                 ->put('total', (int) $counts->sum()),
             'associates' => [

@@ -167,7 +167,7 @@ class AssociateInvitationTest extends TestCase
         Mail::assertQueued(InvitationMail::class, function (InvitationMail $mail) {
             $mail->build();
 
-            return $mail->subject === 'Cámara Hotelera Test te invita a HotelIgnite'
+            return $mail->subject === 'Cámara Hotelera Test te invita a asociarte'
                 && $mail->viewData['pitch'] === 'Cámara Hotelera Test te invita a sumar Hostal como socio de la cámara.'
                 && $mail->viewData['hasOwner'] === false;
         });
@@ -293,6 +293,28 @@ class AssociateInvitationTest extends TestCase
 
         Sanctum::actingAs($owner);
         $this->assertCount(2, $this->getJson('/api/admin/v1/incoming-invitations')->json('data'));
+    }
+
+    public function test_la_landing_sabe_si_el_invitado_ya_tiene_cuenta(): void
+    {
+        $client = Client::create(['name' => 'Cámara Landing', 'type' => Client::TYPE_CHAMBER]);
+        $draft = $this->draft('Borrador Landing');
+        $token = 'tok-'.uniqid();
+        $invitation = Invitation::create([
+            'client_id' => $client->id,
+            'accommodation_id' => $draft->id,
+            'email' => 'nuevo-'.uniqid().'@hotel.test',
+            'token_hash' => Invitation::hashToken($token),
+            'expires_at' => now()->addDays(5),
+        ]);
+
+        // Borrador + email sin usuario: la landing tiene que ofrecer registrarse.
+        $this->getJson("/api/v1/invitations/{$token}")->assertOk()
+            ->assertJsonPath('case', 'claim')
+            ->assertJsonPath('has_account', false);
+
+        $this->user(User::TYPE_ACCOUNT, ['email' => strtoupper($invitation->email)]);
+        $this->getJson("/api/v1/invitations/{$token}")->assertOk()->assertJsonPath('has_account', true);
     }
 
     public function test_tomar_un_borrador_por_el_mail_tambien_deja_el_vinculo_aceptado(): void

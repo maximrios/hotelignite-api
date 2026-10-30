@@ -476,7 +476,7 @@ class PointOfInterestTest extends TestCase
     {
         $client = Client::create(['name' => 'Portal test POI', 'type' => 'agency', 'active' => true]);
         $accommodation = $this->makeAccommodation();
-        $accommodation->clients()->attach($client->id, ['status' => 'active']);
+        $accommodation->clients()->attach($client->id, ['status' => 'active', 'verified_at' => now()]);
         $near = $this->makePoi(['latitude' => $this->metersNorth(200), 'source' => 'osm', 'external_id' => 'x-'.uniqid()]);
         $key = ClientApiKey::generateFor($client, 'poi test', ['catalog:read'])['plain'];
 

@@ -71,6 +71,17 @@ class User extends Authenticatable
         return $this->belongsTo(Client::class);
     }
 
+    public function invitations()
+    {
+        return $this->hasMany(UserInvitation::class);
+    }
+
+    /** La invitación de acceso más reciente: la que muestra el CRM. */
+    public function latestInvitation()
+    {
+        return $this->hasOne(UserInvitation::class)->latestOfMany();
+    }
+
     /**
      * Acotamiento opcional de un user `account` a alojamientos puntuales.
      * Vacío = ve toda su cuenta (default dinámico); con filas = ve solo esos.

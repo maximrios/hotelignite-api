@@ -29,6 +29,8 @@ use App\Repositories\Contracts\BookingInterface;
 use App\Repositories\Contracts\ChannelInterface;
 use App\Repositories\Contracts\CityInterface;
 use App\Repositories\Contracts\DocumentInterface;
+use App\Repositories\Contracts\DuesInterface;
+use App\Repositories\Contracts\PublicationInterface;
 use App\Repositories\Contracts\EventInterface;
 use App\Repositories\Contracts\ExperienceInterface;
 use App\Repositories\Contracts\InquiryInterface;
@@ -50,7 +52,10 @@ use App\Repositories\Contracts\RoomTypeServiceInterface;
 use App\Repositories\Contracts\ServiceInterface;
 use App\Repositories\Contracts\TourInterface;
 use App\Repositories\Contracts\TravelAgencyInterface;
+use App\Repositories\Contracts\UserInvitationInterface;
 use App\Repositories\DocumentRepository;
+use App\Repositories\DuesRepository;
+use App\Repositories\PublicationRepository;
 use App\Repositories\EventRepository;
 use App\Repositories\ExperienceRepository;
 use App\Repositories\InquiryRepository;
@@ -72,6 +77,7 @@ use App\Repositories\RoomTypeServiceRepository;
 use App\Repositories\ServiceRepository;
 use App\Repositories\TourRepository;
 use App\Repositories\TravelAgencyRespository;
+use App\Repositories\UserInvitationRepository;
 use Illuminate\Support\ServiceProvider;
 
 class RepositoryServiceProvider extends ServiceProvider
@@ -116,8 +122,11 @@ class RepositoryServiceProvider extends ServiceProvider
         $this->app->bind(RoomTypeBedInterface::class, RoomTypeBedRepository::class);
         $this->app->bind(AccommodationDescriptionInterface::class, AccommodationDescriptionRepository::class);
         $this->app->bind(InvitationInterface::class, InvitationRepository::class);
+        $this->app->bind(UserInvitationInterface::class, UserInvitationRepository::class);
         $this->app->bind(BillingInterface::class, BillingRepository::class);
         $this->app->bind(DocumentInterface::class, DocumentRepository::class);
+        $this->app->bind(PublicationInterface::class, PublicationRepository::class);
+        $this->app->bind(DuesInterface::class, DuesRepository::class);
     }
 
     /**

@@ -56,8 +56,13 @@ class RouteServiceProvider extends ServiceProvider
      */
     protected function configureRateLimiting()
     {
+        // Los paneles (PMS, CRM, clients) renderizan en el server y cada página
+        // pide 3 a 5 endpoints: con 60/min, navegar rápido terminaba en 429 y la
+        // página se veía vacía. Logueado, 120 por user; anónimo, 60 por IP.
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip())->response(function () {
+            $user = $request->user();
+
+            return Limit::perMinute($user ? 120 : 60)->by($user?->id ?: $request->ip())->response(function () {
                 return response()->json([
                     'message' => 'You have exceeded. Too Many Attempts.',
                 ], 429);
@@ -133,6 +138,19 @@ class RouteServiceProvider extends ServiceProvider
             return [
                 Limit::perMinute(2)->by('resend-min|'.$key),
                 Limit::perHour(6)->by('resend-hour|'.$key),
+            ];
+        });
+
+        // "Olvidé mi contraseña": mismo freno que el reenvío del registro, por
+        // email + IP. No por IP sola: el pedido llega desde el server de Next,
+        // así que todos los usuarios comparten IP. El broker además corta a un
+        // mail por minuto por user.
+        RateLimiter::for('password-forgot', function (Request $request) {
+            $key = strtolower((string) $request->input('email')).'|'.$request->ip();
+
+            return [
+                Limit::perMinute(3)->by('pwd-min|'.$key),
+                Limit::perHour(10)->by('pwd-hour|'.$key),
             ];
         });
 

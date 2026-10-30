@@ -342,7 +342,7 @@ class UserManagementTest extends TestCase
         $this->assertArrayNotHasKey('remember_token', $data);
         $this->assertArrayNotHasKey('tokens', $data);
         $this->assertSame(
-            ['id', 'name', 'email', 'user_type', 'account_id', 'client_id', 'accommodations', 'created_at'],
+            ['id', 'name', 'email', 'user_type', 'account_id', 'client_id', 'accommodations', 'invitation', 'created_at'],
             array_keys($data)
         );
     }

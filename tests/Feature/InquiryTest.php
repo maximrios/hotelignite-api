@@ -51,7 +51,7 @@ class InquiryTest extends TestCase
 
         $this->account = Account::create(['name' => 'Cuenta consultas']);
         $this->accommodation = $this->makeAccommodation($this->account);
-        $this->accommodation->clients()->attach($this->portal->id, ['status' => 'active']);
+        $this->accommodation->clients()->attach($this->portal->id, ['status' => 'active', 'verified_at' => now()]);
 
         $this->experience = $this->makeExperience($this->portal);
     }

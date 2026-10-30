@@ -4,6 +4,7 @@ namespace App\Http\Requests\Admin;
 
 use App\Models\Client;
 use App\Models\Plan;
+use App\Rules\CloudinaryImageUrl;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -20,6 +21,9 @@ class UpdateClientRequest extends FormRequest
             'name' => ['sometimes', 'string', 'max:255'],
             'type' => ['nullable', Rule::in(Client::TYPES)],
             'email' => ['nullable', 'email', 'max:255'],
+            // Logo para la doble marca; lo sube el CRM a Cloudinary.
+            'logo_url' => ['nullable', 'string', 'max:500', new CloudinaryImageUrl],
+            'logo_public_id' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:50'],
             'active' => ['sometimes', 'boolean'],
             'rate_limit_per_minute' => ['nullable', 'integer', 'min:1', 'max:100000'],

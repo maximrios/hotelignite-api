@@ -37,6 +37,8 @@ class AssociateController extends BaseController
                 'state' => $request->string('state')->toString() ?: null,
                 'search' => $request->string('search')->trim()->toString() ?: null,
                 'city_id' => $request->integer('city_id') ?: null,
+                'published' => $request->boolean('published'),
+                'dues' => $request->string('dues')->toString() ?: null,
                 'page' => $request->integer('page', 1),
                 'per_page' => $request->integer('per_page', 50),
             ])

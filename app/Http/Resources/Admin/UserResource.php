@@ -30,6 +30,16 @@ class UserResource extends JsonResource
                 'name' => $a->name,
                 'slug' => $a->slug,
             ])),
+            // Invitación de acceso más reciente (email de bienvenida). Null si el
+            // user nunca fue invitado (alta con contraseña manual).
+            'invitation' => $this->whenLoaded('latestInvitation', fn () => $this->latestInvitation ? [
+                'status' => $this->latestInvitation->status(),
+                'sent_at' => $this->latestInvitation->sent_at,
+                'opened_at' => $this->latestInvitation->opened_at,
+                'reminded_at' => $this->latestInvitation->reminded_at,
+                'accepted_at' => $this->latestInvitation->accepted_at,
+                'expires_at' => $this->latestInvitation->expires_at,
+            ] : null),
             'created_at' => $this->created_at,
         ];
     }

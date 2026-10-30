@@ -30,21 +30,25 @@ use App\Http\Controllers\Api\Admin\V1\PointOfInterestController;
 use App\Http\Controllers\Api\Admin\V1\ServiceController;
 use App\Http\Controllers\Api\Admin\V1\StateController;
 use App\Http\Controllers\Api\Admin\V1\UserController;
+use App\Http\Controllers\Api\Admin\V1\UserInvitationController as AdminUserInvitationController;
+use App\Http\Controllers\Api\Auth\PasswordResetController;
 use App\Http\Controllers\Api\ClientPanel\V1\AccommodationExportController;
 use App\Http\Controllers\Api\ClientPanel\V1\AssociateController;
 use App\Http\Controllers\Api\ClientPanel\V1\BillingController as ClientPanelBillingController;
 use App\Http\Controllers\Api\ClientPanel\V1\DocumentController as ClientPanelDocumentController;
+use App\Http\Controllers\Api\ClientPanel\V1\DuesController;
 use App\Http\Controllers\Api\ClientPanel\V1\EventController as ClientPanelEventController;
 use App\Http\Controllers\Api\ClientPanel\V1\ExperienceController as ClientPanelExperienceController;
 use App\Http\Controllers\Api\ClientPanel\V1\InquiryController as ClientPanelInquiryController;
 use App\Http\Controllers\Api\ClientPanel\V1\InvitationController as ClientPanelInvitationController;
 use App\Http\Controllers\Api\ClientPanel\V1\PointOfInterestController as ClientPanelPointOfInterestController;
 use App\Http\Controllers\Api\ClientPanel\V1\ProfileController as ClientPanelProfileController;
+use App\Http\Controllers\Api\ClientPanel\V1\PublicationController;
 use App\Http\Controllers\Api\ClientPanel\V1\SignupController;
 use App\Http\Controllers\Api\Invitations\PublicInvitationController;
+use App\Http\Controllers\Api\Invitations\PublicUserInvitationController;
 use App\Http\Controllers\Api\V1\AccommodationAvailabilityController;
 use App\Http\Controllers\Api\V1\AccommodationBillingController;
-use App\Http\Controllers\Api\V1\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\V1\AccommodationController as WebAccommodationController;
 use App\Http\Controllers\Api\V1\AccommodationDescriptionController;
 use App\Http\Controllers\Api\V1\AccommodationPolicyController;
@@ -61,6 +65,7 @@ use App\Http\Controllers\Api\V1\HousekeepingController;
 use App\Http\Controllers\Api\V1\InquiryController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\LeadController;
+use App\Http\Controllers\Api\V1\MercadoPagoWebhookController;
 use App\Http\Controllers\Api\V1\PlanController;
 use App\Http\Controllers\Api\V1\PolicyController;
 use App\Http\Controllers\Api\V1\PricingController;
@@ -95,6 +100,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [UserAuthController::class, 'login'])->middleware('throttle:login');
 
+/*
+| "Olvidé mi contraseña" para el PMS y el portal de clients. El link del mail
+| lleva a `{app}/restablecer/{token}`. Ver PasswordResetController.
+*/
+Route::post('v1/password/forgot', [PasswordResetController::class, 'forgot'])->middleware('throttle:password-forgot')->name('password.forgot');
+Route::post('v1/password/reset', [PasswordResetController::class, 'reset'])->middleware('throttle:invitations-public')->name('password.reset');
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
@@ -114,6 +126,17 @@ Route::prefix('v1/invitations')->middleware('throttle:invitations-public')->grou
     Route::get('{token}', [PublicInvitationController::class, 'show'])->name('invitations.show');
     Route::post('{token}/accept', [PublicInvitationController::class, 'accept'])->name('invitations.accept');
     Route::post('{token}/decline', [PublicInvitationController::class, 'decline'])->name('invitations.decline');
+});
+
+/*
+| Activación del acceso de un user dado de alta por el staff: el link del email
+| de bienvenida lleva al portal de clients (`/activar/{token}`), que llama acá.
+| Ver App\Models\UserInvitation.
+*/
+Route::prefix('v1/user-invitations')->middleware('throttle:invitations-public')->group(function () {
+    Route::get('{token}', [PublicUserInvitationController::class, 'show'])->name('user-invitations.show');
+    Route::post('{token}/open', [PublicUserInvitationController::class, 'open'])->name('user-invitations.open');
+    Route::post('{token}/accept', [PublicUserInvitationController::class, 'accept'])->name('user-invitations.accept');
 });
 
 /*
@@ -155,10 +178,15 @@ Route::middleware(['auth:sanctum', 'client.user'])->prefix('client-panel/v1')->g
         ->middleware('throttle:invitations')->name('client-panel.invitations.resend');
     Route::get('me', [ClientPanelProfileController::class, 'show'])
         ->middleware('throttle:api')->name('client-panel.me');
+    Route::patch('me/branding', [ClientPanelProfileController::class, 'updateBranding'])
+        ->middleware('throttle:api')->name('client-panel.me.branding');
     Route::get('associates', [AssociateController::class, 'index'])
         ->middleware('throttle:api')->name('client-panel.associates.index');
     Route::post('associates/invite', [AssociateController::class, 'invite'])
         ->middleware('throttle:invitations')->name('client-panel.associates.invite');
+    // El gate de publicación: `verified_at` del pivote. Ver `PublicationRepository`.
+    Route::post('associates/publication', [PublicationController::class, 'update'])
+        ->middleware('throttle:api')->name('client-panel.associates.publication');
     Route::get('accommodations/export', [AccommodationExportController::class, 'index'])
         ->middleware('throttle:api')->name('client-panel.accommodations.export');
 
@@ -205,6 +233,21 @@ Route::middleware(['auth:sanctum', 'client.user'])->prefix('client-panel/v1')->g
         Route::post('experiences/{experience}/media', [ExperienceMediaController::class, 'store'])->name('client-panel.experiences.media.store');
         Route::patch('experiences/{experience}/media/reorder', [ExperienceMediaController::class, 'reorder'])->name('client-panel.experiences.media.reorder');
         Route::delete('experiences/{experience}/media/{media}', [ExperienceMediaController::class, 'destroy'])->name('client-panel.experiences.media.destroy');
+
+        // Cuotas de socios (cámaras): categorías, emisión, cuenta corriente.
+        // `{type}` es `App\Support\AssociateType`; no es route-model binding.
+        Route::get('dues/summary', [DuesController::class, 'summary'])->name('client-panel.dues.summary');
+        Route::get('dues/members', [DuesController::class, 'members'])->name('client-panel.dues.members');
+        Route::post('dues/assignments', [DuesController::class, 'assign'])->name('client-panel.dues.assign');
+        Route::get('dues/fees', [DuesController::class, 'fees'])->name('client-panel.dues.fees.index');
+        Route::post('dues/fees', [DuesController::class, 'storeFee'])->name('client-panel.dues.fees.store');
+        Route::patch('dues/fees/{fee}', [DuesController::class, 'updateFee'])->name('client-panel.dues.fees.update');
+        Route::delete('dues/fees/{fee}', [DuesController::class, 'destroyFee'])->name('client-panel.dues.fees.destroy');
+        Route::get('dues/emission', [DuesController::class, 'emissionPreview'])->name('client-panel.dues.emission.preview');
+        Route::post('dues/emission', [DuesController::class, 'emit'])->name('client-panel.dues.emission.store');
+        Route::get('dues/accounts/{type}/{id}', [DuesController::class, 'account'])->whereNumber('id')->name('client-panel.dues.accounts.show');
+        Route::post('dues/accounts/{type}/{id}/entries', [DuesController::class, 'record'])->whereNumber('id')->name('client-panel.dues.accounts.entries.store');
+        Route::post('dues/entries/{entry}/reverse', [DuesController::class, 'reverse'])->name('client-panel.dues.entries.reverse');
 
         Route::get('inquiries', [ClientPanelInquiryController::class, 'index'])->name('client-panel.inquiries.index');
         Route::patch('inquiries/{inquiry}', [ClientPanelInquiryController::class, 'update'])->name('client-panel.inquiries.update');
@@ -343,6 +386,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
                 Route::get('users/{user}', [UserController::class, 'show'])->name('admin.users.show');
                 Route::patch('users/{user}', [UserController::class, 'update'])->name('admin.users.update');
                 Route::delete('users/{user}', [UserController::class, 'destroy'])->name('admin.users.destroy');
+                Route::post('users/{user}/invitation', [AdminUserInvitationController::class, 'store'])->name('admin.users.invitation.store');
 
                 // Escritura del catálogo global de servicios. La lectura queda
                 // arriba, fuera de `platform`: la necesita cualquiera que edite

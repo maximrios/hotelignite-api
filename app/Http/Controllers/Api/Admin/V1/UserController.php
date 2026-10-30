@@ -6,6 +6,7 @@ use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Http\Resources\Admin\UserResource;
 use App\Models\User;
+use App\Repositories\Contracts\UserInvitationInterface;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 /**
  * Gestión de usuarios de plataforma, de cuentas hoteleras y de clients B2B
@@ -25,6 +27,8 @@ use Illuminate\Support\Facades\Log;
 class UserController extends BaseController
 {
     use AuthorizesRequests;
+
+    public function __construct(private UserInvitationInterface $invitations) {}
 
     public function index(Request $request)
     {
@@ -40,6 +44,7 @@ class UserController extends BaseController
             ->when($request->filled('user_type'), fn ($q) => $q->where('user_type', $request->query('user_type')))
             ->when($request->filled('account_id'), fn ($q) => $q->where('account_id', $request->integer('account_id')))
             ->when($request->filled('client_id'), fn ($q) => $q->where('client_id', $request->integer('client_id')))
+            ->with('latestInvitation')
             ->orderByDesc('id')
             ->paginate($request->integer('limit', 15));
 
@@ -54,19 +59,31 @@ class UserController extends BaseController
         // esto, si el sync del pivote falla (ej. tabla ausente), el User::create ya
         // commiteó y queda un user a medio crear mientras el cliente ve un 500.
         $user = DB::transaction(function () use ($request) {
+            // Con invitación, la columna (NOT NULL) lleva un hash que nadie
+            // conoce: el user no puede entrar hasta elegir la suya desde el email.
+            $password = $request->wantsInvitation()
+                ? Str::random(64)
+                : $request->validated()['password'];
+
             $user = User::create(array_merge(
                 $request->tenancyAttributes(),
-                ['password' => Hash::make($request->validated()['password'])]
+                ['password' => Hash::make($password)]
             ));
 
             // El acotamiento por alojamiento vive en un pivote, no en una columna,
             // así que se sincroniza aparte. Vacío = ve toda la cuenta (sin filas).
             $user->accommodations()->sync($request->accommodationIds());
 
+            // Dentro de la transacción: si algo falla no queda una invitación
+            // huérfana, y el email sale recién al commit (afterCommit del mail).
+            if ($request->wantsInvitation()) {
+                $this->invitations->issue($user, $request->user());
+            }
+
             return $user;
         });
 
-        return (new UserResource($user->load('accommodations')))->response()->setStatusCode(201);
+        return (new UserResource($user->load(['accommodations', 'latestInvitation'])))->response()->setStatusCode(201);
     }
 
     public function show(User $user)
@@ -76,7 +93,7 @@ class UserController extends BaseController
         // El CRM precarga el acotamiento en el form de edición: sin el eager-load
         // el Resource omite `accommodations` y el form arranca creyendo "toda la
         // cuenta" aunque el user esté acotado.
-        return new UserResource($user->load('accommodations'));
+        return new UserResource($user->load(['accommodations', 'latestInvitation']));
     }
 
     public function update(UpdateUserRequest $request, User $user)
@@ -99,11 +116,17 @@ class UserController extends BaseController
         DB::transaction(function () use ($request, $user, $attributes, $previousTenancy) {
             $user->update($attributes);
             $this->syncAccommodationScope($request, $user, $previousTenancy);
+
+            // Contraseña cargada a mano: el link pendiente pisaría la que se acaba
+            // de fijar, así que deja de valer.
+            if (isset($attributes['password'])) {
+                $this->invitations->revokePending($user);
+            }
         });
 
         $this->auditTenancyChange($request, $user, $previousTenancy);
 
-        return new UserResource($user->fresh()->load('accommodations'));
+        return new UserResource($user->fresh()->load(['accommodations', 'latestInvitation']));
     }
 
     /**
@@ -142,6 +165,9 @@ class UserController extends BaseController
         // Revocar antes de la baja: si no, los tokens vigentes siguen
         // autenticando hasta expirar y la baja queda cosmética.
         $user->revokeApiTokens();
+        // Su link de bienvenida tampoco tiene que quedar vivo (y la métrica no
+        // tiene que contarlo como pendiente).
+        $this->invitations->revokePending($user);
         $user->delete();
 
         Log::info('admin.users.deleted', [

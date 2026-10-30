@@ -15,9 +15,9 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 
 /**
- * Catálogo de accommodations para consumidores B2B. Siempre scopeado a los
- * accommodations relacionados con el client (pivote `accommodation_client`) vía
- * `Accommodation::scopeVisibleTo`, usando el User en memoria que dejó
+ * Catálogo de accommodations para consumidores B2B. Siempre scopeado a lo que
+ * el client habilitó para su web (`Accommodation::scopePublishedTo`: pivote
+ * `active` + `verified_at`), usando el User en memoria que dejó
  * `AuthenticateApiClient`. Sólo lectura.
  */
 class AccommodationController extends BaseController
@@ -36,7 +36,7 @@ class AccommodationController extends BaseController
     {
         $limit = (int) ($request->limit ?: 10);
 
-        $accommodations = Accommodation::visibleTo($request->user())
+        $accommodations = Accommodation::publishedTo($request->user())
             ->with(self::EAGER)
             ->withCount('rooms')
             ->when($request->filled('city'), fn ($q) => $q->where('city_id', $request->query('city')))
@@ -54,7 +54,7 @@ class AccommodationController extends BaseController
 
     public function show(Request $request, string $slug)
     {
-        $accommodation = Accommodation::visibleTo($request->user())
+        $accommodation = Accommodation::publishedTo($request->user())
             ->with(self::EAGER)
             ->withCount('rooms')
             ->where('slug', $slug)
@@ -73,7 +73,7 @@ class AccommodationController extends BaseController
      */
     public function availability(CheckAvailabilityRequest $request, int|string $id)
     {
-        $visible = Accommodation::visibleTo($request->user())
+        $visible = Accommodation::publishedTo($request->user())
             ->whereKey($id)
             ->exists();
 
@@ -92,7 +92,7 @@ class AccommodationController extends BaseController
      */
     public function nearbyPoints(NearbyPointsRequest $request, string $slug, PointOfInterestInterface $points): JsonResponse
     {
-        $accommodation = Accommodation::visibleTo($request->user())
+        $accommodation = Accommodation::publishedTo($request->user())
             ->where('slug', $slug)
             ->first();
 

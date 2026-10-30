@@ -65,6 +65,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Invitaciones de acceso (users dados de alta por el staff)
+    |--------------------------------------------------------------------------
+    |
+    | El staff da de alta al user desde el CRM y el user elige su contraseña
+    | desde el link del email de bienvenida (`{clients_portal_url}/activar/…`).
+    | Ver App\Models\UserInvitation.
+    |
+    */
+
+    // Vencimiento del link de bienvenida. Más que un reset (minutos) y menos
+    // que la invitación a hoteleros (30 días): es un acceso con permisos.
+    'user_invitation_expiration_days' => (int) env('API_USER_INVITATION_EXPIRATION_DAYS', 7),
+
+    // Si no activó a los N días del envío, sale un recordatorio (uno solo).
+    'user_invitation_reminder_days' => (int) env('API_USER_INVITATION_REMINDER_DAYS', 3),
+
+    // Casilla que atiende las respuestas al email de bienvenida (Reply-To) y que
+    // se muestra como ayuda. Vacía → sin Reply-To ni línea de ayuda.
+    'support_email' => trim((string) env('API_SUPPORT_EMAIL', '')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Leads de la landing
     |--------------------------------------------------------------------------
     |

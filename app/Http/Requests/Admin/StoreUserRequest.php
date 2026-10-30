@@ -19,7 +19,14 @@ class StoreUserRequest extends FormRequest
         return [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // Con `send_invitation` el user elige su contraseña desde el email de
+            // bienvenida: cargarle una a mano a la vez sería ambiguo.
+            'send_invitation' => ['sometimes', 'boolean'],
+            'password' => [
+                Rule::requiredIf(! $this->boolean('send_invitation')),
+                Rule::prohibitedIf($this->boolean('send_invitation')),
+                'nullable', 'string', 'min:8', 'confirmed',
+            ],
             'user_type' => ['required', Rule::in(User::TYPES)],
 
             // `required_if` sólo exige el id del tipo que corresponde; el sobrante
@@ -42,6 +49,7 @@ class StoreUserRequest extends FormRequest
         return [
             'account_id.required_if' => 'Un usuario de tipo account requiere un account_id.',
             'client_id.required_if' => 'Un usuario de tipo client requiere un client_id.',
+            'password.prohibited' => 'Si se envía la invitación, la contraseña la elige el usuario.',
         ];
     }
 
@@ -49,6 +57,12 @@ class StoreUserRequest extends FormRequest
     {
         $validator->after(function (Validator $validator): void {
             if ($validator->errors()->isNotEmpty()) {
+                return;
+            }
+
+            if ($this->wantsInvitation() && $this->input('user_type') !== User::TYPE_CLIENT) {
+                $validator->errors()->add('send_invitation', 'Por ahora la invitación por email es sólo para usuarios de clients.');
+
                 return;
             }
 
@@ -66,6 +80,11 @@ class StoreUserRequest extends FormRequest
                 );
             }
         });
+    }
+
+    public function wantsInvitation(): bool
+    {
+        return $this->boolean('send_invitation');
     }
 
     /**
