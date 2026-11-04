@@ -29,6 +29,12 @@ class Subscription extends Model
 
     public const METHOD_PURCHASE_ORDER = 'purchase_order';
 
+    /** Asignado por el equipo desde el CRM, sin cobro registrado (cortesía, prueba, acuerdo). */
+    public const METHOD_MANUAL = 'manual';
+
+    /** Métodos que significan plata entrando: los que cuentan para el ingreso mensual. */
+    public const BILLED_METHODS = [self::METHOD_MERCADOPAGO, self::METHOD_TRANSFER, self::METHOD_PURCHASE_ORDER];
+
     protected $fillable = [
         'plan_id',
         'status',

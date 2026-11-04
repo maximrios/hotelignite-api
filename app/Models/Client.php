@@ -208,6 +208,12 @@ class Client extends Model
         return $this->morphMany(Subscription::class, 'subscriber');
     }
 
+    /** La suscripción vigente: hay a lo sumo una (índice único parcial sobre los estados vivos). */
+    public function liveSubscription()
+    {
+        return $this->morphOne(Subscription::class, 'subscriber')->whereIn('status', Subscription::LIVE_STATUSES);
+    }
+
     public function invoices()
     {
         return $this->morphMany(Invoice::class, 'payer');

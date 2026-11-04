@@ -18,7 +18,9 @@ class StoreAccommodationRequest extends FormRequest
             'name'               => ['required', 'string', 'min:3', 'max:255'],
             'legal_name'         => ['nullable', 'string', 'max:255'],
             'account_id'         => ['nullable', 'integer', 'exists:accounts,id'],
-            'plan_id'            => ['nullable', 'integer', 'exists:plans,id'],
+            // Sin 'plan_id': el plan cambia sólo por facturación (pedido aprobado, Mercado Pago o
+            // PUT admin/v1/accommodations/{id}/plan del staff), que además lleva la suscripción.
+            // Aceptarlo acá dejaba al hotelero subirse de plan sin pagar.
             'type_id'            => ['nullable', 'integer'],
             'stars'              => ['nullable', 'integer', 'between:1,5'],
             'email'              => ['nullable', 'email'],

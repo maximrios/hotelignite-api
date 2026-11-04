@@ -449,6 +449,38 @@ class AccommodationBillingRepository
         });
     }
 
+    /**
+     * Cambio de plan hecho por el equipo desde el CRM, sin pedido del hotelero.
+     * Pasa por `activate()` como todo lo demás, así el plan y la suscripción no
+     * se separan (antes el CRM tocaba `plan_id` a mano y quedaban planes pagos
+     * sin suscripción). Si el hotel pagaba con Mercado Pago, `activate()`
+     * cancela ese débito.
+     *
+     * Con un pedido pendiente corta con 409: si el hotelero estaba pagando en
+     * Mercado Pago, aprobarse después pisaría lo que eligió el equipo.
+     */
+    public function assignPlan(Accommodation $accommodation, Plan $plan, string $billingPeriod, string $paymentMethod): void
+    {
+        abort_unless($plan->audience === Plan::AUDIENCE_ACCOMMODATION, 422, 'Ese plan no es de alojamientos.');
+
+        DB::transaction(function () use ($accommodation, $plan, $billingPeriod, $paymentMethod) {
+            $accommodation = Accommodation::lockForUpdate()->findOrFail($accommodation->id);
+
+            abort_if(
+                $accommodation->planChangeRequests()->where('status', PlanChangeRequest::PENDING)->exists(),
+                409,
+                'Hay un pedido de cambio de plan pendiente: resolvelo primero desde Pedidos de cambio de plan.',
+            );
+
+            $live = $accommodation->subscriptions()->live()->first();
+            $unchanged = (int) $accommodation->plan_id === $plan->id
+                && ($plan->isFree() || ($live !== null && (int) $live->plan_id === $plan->id));
+            abort_if($unchanged, 422, 'El alojamiento ya tiene ese plan.');
+
+            $this->activate($accommodation, $plan, $billingPeriod, $paymentMethod);
+        });
+    }
+
     /** Aprueba un pedido pendiente ya bloqueado. `$by` null = Mercado Pago. */
     private function approveRequest(PlanChangeRequest $request, ?User $by, ?string $paymentMethod, ?string $providerSubscriptionId): void
     {

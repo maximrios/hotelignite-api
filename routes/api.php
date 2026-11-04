@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\Admin\V1\ExperienceMediaController;
 use App\Http\Controllers\Api\Admin\V1\IncomingInvitationController;
 use App\Http\Controllers\Api\Admin\V1\PlanChangeRequestController;
 use App\Http\Controllers\Api\Admin\V1\PlanController as AdminPlanController;
+use App\Http\Controllers\Api\Admin\V1\SubscriptionController as AdminSubscriptionController;
 use App\Http\Controllers\Api\Admin\V1\PoiCategoryController;
 use App\Http\Controllers\Api\Admin\V1\PointOfInterestController;
 use App\Http\Controllers\Api\Admin\V1\ServiceController;
@@ -372,6 +373,14 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
                 Route::get('plan-requests', [PlanChangeRequestController::class, 'index'])->name('admin.plan-requests.index');
                 Route::post('plan-requests/{id}/approve', [PlanChangeRequestController::class, 'approve'])->whereNumber('id')->name('admin.plan-requests.approve');
                 Route::post('plan-requests/{id}/reject', [PlanChangeRequestController::class, 'reject'])->whereNumber('id')->name('admin.plan-requests.reject');
+
+                // Suscripciones (CRM → Facturación): listado de suscriptores, resumen,
+                // ficha de cada uno y cambio de plan de un alojamiento hecho por el equipo.
+                Route::get('subscriptions', [AdminSubscriptionController::class, 'index'])->name('admin.subscriptions.index');
+                Route::get('subscriptions/summary', [AdminSubscriptionController::class, 'summary'])->name('admin.subscriptions.summary');
+                Route::get('accommodations/{accommodation}/subscription', [AdminSubscriptionController::class, 'showAccommodation'])->name('admin.accommodations.subscription');
+                Route::put('accommodations/{accommodation}/plan', [AdminSubscriptionController::class, 'assignAccommodationPlan'])->name('admin.accommodations.plan');
+                Route::get('clients/{client}/subscription', [AdminSubscriptionController::class, 'showClient'])->name('admin.clients.subscription');
 
                 Route::get('clients', [ClientController::class, 'index'])->name('admin.clients.index');
                 Route::post('clients', [ClientController::class, 'store'])->name('admin.clients.store');
