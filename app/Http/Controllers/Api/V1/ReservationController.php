@@ -55,6 +55,11 @@ class ReservationController extends BaseController
         return response()->json($this->reservationInterface->update($id, $request), 200);
     }
 
+    public function confirmRequest(string $id)
+    {
+        return response()->json($this->reservationInterface->confirmRequest($id), 200);
+    }
+
     public function cancel(CancelReservationRequest $request, string $id)
     {
         return response()->json($this->reservationInterface->cancel($id, $request), 200);

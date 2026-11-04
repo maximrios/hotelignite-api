@@ -31,12 +31,14 @@ class PlanFeatureSeeder extends Seeder
             'booking_engine' => null, 'rate_management' => null,
             'promotions' => null, 'payment_gateway' => null,
             'housekeeping' => null,
+            // Caja del hotel: del Básico en adelante (decisión 2026-11-03).
+            'cash_register' => null,
             'rooms' => 25, 'users' => 3,
         ]);
 
         $pro = array_merge($starter, [
             // Límite del asistente = créditos de IA por mes.
-            'ai_assistant' => 500, 'pms_reports' => null, 'cash_register' => null,
+            'ai_assistant' => 500, 'pms_reports' => null,
             'rooms' => 60, 'users' => 5,
         ]);
 

@@ -18,7 +18,7 @@ class StoreAccommodationRatePolicyRequest extends FormRequest
             'accommodation_id' => ['required', 'integer', 'exists:accommodations,id'],
             'rate_type'        => [
                 'required',
-                Rule::in(['flexible', 'semi_flexible', 'non_refundable']),
+                Rule::in(\App\Models\AccommodationRatePolicy::TYPES),
                 Rule::unique('accommodation_rate_policies')->where(fn($q) =>
                     $q->where('accommodation_id', $this->accommodation_id)
                 ),

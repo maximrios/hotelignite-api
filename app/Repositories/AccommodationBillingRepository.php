@@ -48,6 +48,7 @@ class AccommodationBillingRepository
         'front_desk' => 'Check-in, check-out y parte de viajeros',
         'rate_management' => 'Tarifas completas: planes y temporadas',
         'housekeeping' => 'Housekeeping',
+        'cash_register' => 'Caja: turnos, arqueo y cobros',
         'booking_engine' => 'Motor de reservas en tu web',
         'ai_assistant' => 'Asistente con IA',
         'pms_reports' => 'Reportes de ocupación y revenue',

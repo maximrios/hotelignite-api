@@ -25,6 +25,8 @@ interface ReservationInterface
 
     public function update(string $id, UpdateReservationRequest $request);
 
+    public function confirmRequest(string $id);
+
     public function cancel(string $id, CancelReservationRequest $request);
 
     public function checkIn(string $id, CheckInReservationRequest $request);

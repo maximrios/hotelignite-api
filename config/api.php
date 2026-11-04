@@ -41,6 +41,10 @@ return [
     // (`/consultas`). Sin barra final.
     'pms_url' => rtrim((string) env('PMS_URL', 'http://pms.hotelignite.local:3000'), '/'),
 
+    // Credencial de servicio del motor de reservas (`engine/`). Vacía, el motor
+    // queda apagado. Ver docs/booking-engine.md.
+    'booking_engine_key' => (string) env('BOOKING_ENGINE_KEY', ''),
+
     // Vencimiento del link de confirmación de email del registro, en horas.
     'signup_verification_hours' => (int) env('API_SIGNUP_VERIFICATION_HOURS', 48),
 

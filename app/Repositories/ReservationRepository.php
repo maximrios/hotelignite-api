@@ -12,6 +12,8 @@ use App\Http\Requests\StoreReservationRequest;
 use App\Http\Requests\UpdateReservationRequest;
 use App\Http\Requests\UpdateTravelersRequest;
 use App\Http\Resources\V1\ReservationResource;
+use App\Mail\BookingGuestMail;
+use App\Mail\BookingRequestReceivedMail;
 use App\Http\Resources\V1\ReservationResourceCollection;
 use App\Models\Guest;
 use App\Models\RatePlan;
@@ -25,6 +27,7 @@ use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
@@ -385,20 +388,7 @@ class ReservationRepository implements ReservationInterface
                     'internal_notes' => $data['internal_notes'] ?? null,
                 ]);
 
-                // Columnas legacy NOT NULL que el modelo no expone como fillable.
-                $reservation->forceFill([
-                    'arrival' => $checkin->toDateString(),
-                    'departure' => $checkout->toDateString(),
-                    'nights' => $nights,
-                    'currency_id' => $this->currencyOf($accommodation->currency_id),
-                    'language_id' => 'es',
-                    'package_id' => 0,
-                    'payment_method_id' => 0,
-                    'reservation_type' => 1,
-                    'created' => now(),
-                    'modified' => now(),
-                    'user_created' => $this->tenant()->id,
-                ]);
+                $reservation->fillLegacyColumns($checkin, $checkout, $nights, $this->currencyOf($accommodation->currency_id), $this->tenant()->id);
                 $reservation->save();
                 $reservation->travelers()->attach($guest->id, ['is_primary' => true]);
 
@@ -578,7 +568,7 @@ class ReservationRepository implements ReservationInterface
     }
 
     /** `HI-` + 6 caracteres sin ambiguos (0/O, 1/I). Único por índice en la base. */
-    private function newConfirmationNumber(): string
+    public function newConfirmationNumber(): string
     {
         do {
             $code = 'HI-'.collect(range(1, 6))
@@ -590,7 +580,7 @@ class ReservationRepository implements ReservationInterface
     }
 
     /** Moneda ISO del alojamiento; hay filas con '0' o vacío del dump. */
-    private function currencyOf(?string $currencyId): string
+    public function currencyOf(?string $currencyId): string
     {
         $code = strtoupper(trim((string) $currencyId));
 
@@ -607,23 +597,105 @@ class ReservationRepository implements ReservationInterface
             'Sólo se puede cancelar una reserva que todavía no llegó.'
         );
 
-        DB::transaction(function () use ($reservation, $request) {
-            $reservation->cancelled_at = now();
-            $reservation->cancellation_reason = $request->validated('reason');
-            $reservation->status_id = self::STATUS_CANCELLED;
-            $reservation->save();
+        if ($reservation->isPendingConfirmation()) {
+            $this->closeRequest($reservation, (string) $request->validated('reason'));
+            $this->mailGuest($reservation, BookingGuestMail::DECLINED);
 
-            if ($reservation->room_type_id !== null) {
-                $this->adjustAvailability(
-                    $reservation->room_type_id,
-                    $reservation->effectiveCheckin(),
-                    $reservation->effectiveCheckout(),
-                    +1
-                );
-            }
-        });
+            return new ReservationResource($reservation->refresh()->load(['guest', 'room', 'channel']));
+        }
+
+        DB::transaction(fn () => $this->cancelOne($reservation, $request->validated('reason')));
 
         return new ReservationResource($reservation->load(['guest', 'room', 'channel']));
+    }
+
+    private function cancelOne(Reservation $reservation, ?string $reason): void
+    {
+        $reservation->cancelled_at = now();
+        $reservation->cancellation_reason = $reason;
+        $reservation->status_id = self::STATUS_CANCELLED;
+        $reservation->request_expires_at = null;
+        $reservation->save();
+
+        if ($reservation->room_type_id !== null) {
+            $this->adjustAvailability(
+                $reservation->room_type_id,
+                $reservation->effectiveCheckin(),
+                $reservation->effectiveCheckout(),
+                +1
+            );
+        }
+    }
+
+    /** Rechazo o vencimiento: una solicitud se cierra entera, todo o nada. */
+    private function closeRequest(Reservation $reservation, string $reason): void
+    {
+        DB::transaction(function () use ($reservation, $reason) {
+            $reservation->bookingGroup()
+                ->filter(fn (Reservation $member) => $member->isPendingConfirmation())
+                ->each(fn (Reservation $member) => $this->cancelOne($member, $reason));
+        });
+    }
+
+    /** El hotel acepta una solicitud del motor, con todas sus habitaciones. */
+    public function confirmRequest(string $id): ReservationResource
+    {
+        $reservation = $this->findWritable($id);
+
+        abort_unless($reservation->isPendingConfirmation(), 422, 'La reserva no está pendiente de confirmación.');
+
+        DB::transaction(function () use ($reservation) {
+            $reservation->bookingGroup()
+                ->filter(fn (Reservation $member) => $member->isPendingConfirmation())
+                ->each(function (Reservation $member) {
+                    $member->status_id = self::STATUS_CONFIRMED;
+                    $member->request_expires_at = null;
+                    $member->save();
+                });
+        });
+
+        $this->mailGuest($reservation, BookingGuestMail::CONFIRMED);
+
+        return new ReservationResource($reservation->refresh()->load(['guest', 'room', 'channel']));
+    }
+
+    /**
+     * Vence las solicitudes sin respuesta y libera sus habitaciones.
+     *
+     * @return int solicitudes vencidas
+     */
+    public function expireRequests(): int
+    {
+        $expired = 0;
+
+        Reservation::where('status_id', Reservation::STATUS_PENDING)
+            ->whereNull('cancelled_at')
+            ->whereNotNull('request_expires_at')
+            ->where('request_expires_at', '<=', now())
+            ->get()
+            ->unique(fn (Reservation $r) => $r->booking_group_id ?? $r->id)
+            ->each(function (Reservation $reservation) use (&$expired) {
+                $this->closeRequest($reservation, 'Venció sin respuesta del hotel');
+                $this->mailGuest($reservation, BookingGuestMail::EXPIRED);
+
+                $email = $reservation->accommodation?->email;
+                if (filter_var($email, FILTER_VALIDATE_EMAIL) !== false) {
+                    Mail::to($email)->queue(new BookingRequestReceivedMail($reservation, expired: true));
+                }
+
+                $expired++;
+            });
+
+        return $expired;
+    }
+
+    private function mailGuest(Reservation $reservation, string $kind): void
+    {
+        $email = $reservation->loadMissing('guest')->guest?->email;
+
+        if ($email) {
+            Mail::to($email)->queue(new BookingGuestMail($reservation, $kind));
+        }
     }
 
     // ─── Recepción: check-in, check-out, no-show ───────────────────────────────
@@ -644,6 +716,7 @@ class ReservationRepository implements ReservationInterface
         $checkout = $reservation->effectiveCheckout();
 
         abort_if($reservation->derivedStatus() !== 'arriving', 422, 'Esta reserva ya tiene check-in o está cerrada.');
+        abort_if($reservation->isPendingConfirmation(), 422, 'Confirmá la solicitud antes de hacer el check-in.');
         abort_if($checkin === null || $checkout === null, 422, 'La reserva no tiene fechas.');
         abort_if(
             $checkin->gt($today),
@@ -885,6 +958,8 @@ class ReservationRepository implements ReservationInterface
     {
         $reservation = $this->findWritable($id);
 
+        abort_if($reservation->isPendingConfirmation(), 422, 'Una solicitud sin confirmar se rechaza, no se marca como no-show.');
+
         if (! in_array('no_show', $reservation->availableActions(), true)) {
             abort_if($reservation->derivedStatus() !== 'arriving', 422, 'Sólo se puede marcar no-show una reserva sin check-in.');
             abort(422, 'El no-show se puede marcar desde las '.Reservation::NO_SHOW_HOUR.' hs del día de llegada.');
@@ -1027,7 +1102,7 @@ class ReservationRepository implements ReservationInterface
      * [from, to). Sólo toca días ya cargados en `room_availability`: el cupo de
      * un día sin fila lo define quien publica inventario, no un movimiento.
      */
-    private function adjustAvailability(int $roomTypeId, ?Carbon $from, ?Carbon $to, int $delta): void
+    public function adjustAvailability(int $roomTypeId, ?Carbon $from, ?Carbon $to, int $delta): void
     {
         if ($from === null || $to === null) {
             return;

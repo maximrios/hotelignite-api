@@ -44,6 +44,10 @@ class RouteServiceProvider extends ServiceProvider
             Route::prefix('api/client/v1')
                 ->group(base_path('routes/client-api.php'));
 
+            // Motor de reservas: lo consume el servidor de `engine/`.
+            Route::prefix('api/booking/v1')
+                ->group(base_path('routes/booking-api.php'));
+
             Route::middleware('web')
                 ->group(base_path('routes/web.php'));
         });
@@ -156,6 +160,16 @@ class RouteServiceProvider extends ServiceProvider
 
         // Formulario de la landing (empezar gratis / demo): público y anónimo.
         // Mismo criterio que el registro: un humano lo manda una vez.
+        // Motor: el servidor de `engine/` es una sola IP, así que se limita por el
+        // visitante que informa. Sin credencial válida la request muere en `auth.booking`.
+        RateLimiter::for('booking', function (Request $request) {
+            return Limit::perMinute(120)->by('booking|'.$request->header('X-Engine-Client-Ip', $request->ip()));
+        });
+
+        RateLimiter::for('booking-hold', function (Request $request) {
+            return Limit::perMinute(10)->by('booking-hold|'.$request->header('X-Engine-Client-Ip', $request->ip()));
+        });
+
         RateLimiter::for('leads', function (Request $request) {
             return [
                 Limit::perMinute(3)->by('leads-min|'.$request->ip()),

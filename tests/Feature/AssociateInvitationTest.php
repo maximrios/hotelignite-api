@@ -110,7 +110,7 @@ class AssociateInvitationTest extends TestCase
         $this->assertSame(2, $padron['counts']['borrador']);
         $this->assertSame(1, $padron['counts']['sin_vinculo']);
         $this->assertSame(0, $padron['counts']['vinculado']);
-        $this->assertSame('Con convenio', $padron['vocabulary']['agreed']);
+        $this->assertSame('En la red', $padron['vocabulary']['agreed']);
     }
 
     public function test_la_asociacion_masiva_es_solo_del_staff(): void
@@ -194,7 +194,7 @@ class AssociateInvitationTest extends TestCase
         Sanctum::actingAs($owner);
         $inbox = $this->getJson('/api/admin/v1/incoming-invitations')->assertOk()->json('data');
         $this->assertCount(1, $inbox);
-        $this->assertSame('TuriTest quiere trabajar con Hotel Convenio y te propone un convenio.', $inbox[0]['pitch']);
+        $this->assertSame('TuriTest te invita a sumar Hotel Convenio a su red de alojamientos.', $inbox[0]['pitch']);
 
         $this->postJson("/api/admin/v1/incoming-invitations/{$inbox[0]['id']}/accept")->assertOk();
         $this->assertCount(0, $this->getJson('/api/admin/v1/incoming-invitations')->json('data'));

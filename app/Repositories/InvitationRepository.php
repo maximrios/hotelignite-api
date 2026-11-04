@@ -178,7 +178,7 @@ class InvitationRepository implements InvitationInterface
             'client_type' => $invitation->client?->type,
             // Doble marca: el hotelero aterriza viendo lo mismo que vio en el mail.
             'client_brand' => $invitation->client?->brand(),
-            // La frase que cambia según quién invita ("te propone un convenio",
+            // La frase que cambia según quién invita ("te invita a sumar… a su red",
             // "como socio de la cámara"...). Null si invita el staff.
             'pitch' => $invitation->client?->invitationPitch($accommodationName),
             'contact_name' => $invitation->contact_name,

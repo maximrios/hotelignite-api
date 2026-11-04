@@ -39,6 +39,17 @@ return [
     // Cobro de los planes del PMS con suscripciones (preapproval) de Mercado Pago.
     // `subscription_back_url`: adonde vuelve el hotelero desde Mercado Pago (la
     // pantalla de facturación del PMS; https en producción).
+    // Colmexa: el motor de los agentes IA (docs/ai-agents-plan.md). HotelIgnite
+    // es un partner: crea un tenant por alojamiento y le carga los créditos.
+    'colmexa' => [
+        'url' => env('COLMEXA_URL'),
+        'partner_token' => env('COLMEXA_PARTNER_TOKEN'),
+        'timeout' => (int) env('COLMEXA_TIMEOUT', 20),
+        // Cómo llega Colmexa al MCP de HotelIgnite. En dev los dos viven en la red
+        // docker `hotelignite`, así que no es la URL pública de la API.
+        'mcp_base_url' => env('COLMEXA_MCP_BASE_URL', env('APP_URL')),
+    ],
+
     'mercadopago' => [
         'access_token' => env('MP_ACCESS_TOKEN'),
         'webhook_secret' => env('MP_WEBHOOK_SECRET'),

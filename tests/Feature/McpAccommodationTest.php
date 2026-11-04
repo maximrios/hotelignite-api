@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\InquiryReceivedMail;
 use App\Models\Accommodation;
 use App\Models\AccommodationApiKey;
+use App\Models\AccommodationRatePolicy;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\ClientApiKey;
@@ -13,6 +14,7 @@ use App\Models\Inquiry;
 use App\Models\Plan;
 use App\Models\RoomAvailability;
 use App\Models\RoomType;
+use App\Models\RoomTypeBed;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -90,6 +92,41 @@ class McpAccommodationTest extends TestCase
 
         $this->assertSame($this->acc->id, $info['id']);
         $this->assertSame('Hostería del Cerro', $info['name']);
+    }
+
+    #[Test]
+    public function la_ficha_trae_estrellas_camas_y_cancelacion(): void
+    {
+        $this->acc->update(['stars' => 4, 'landmark' => 'Frente a la plaza']);
+        $roomType = RoomType::create([
+            'accommodation_id' => $this->acc->id,
+            'slug' => 'doble-'.uniqid(),
+            'max_occupancy' => 2,
+            'size' => 24,
+            'quantity' => 1,
+        ]);
+        RoomTypeBed::create(['room_type_id' => $roomType->id, 'type' => 'double', 'quantity' => 1]);
+        AccommodationRatePolicy::create([
+            'accommodation_id' => $this->acc->id,
+            'rate_type' => 'flexible',
+            'cancel_days' => 3,
+            'cancel_penalty' => 50,
+        ]);
+        AccommodationRatePolicy::create(['accommodation_id' => $this->acc->id, 'rate_type' => 'non_refundable']);
+
+        $info = $this->tool('get_accommodation_info');
+
+        $this->assertSame(4, $info['stars']);
+        $this->assertSame('Frente a la plaza', $info['location']['landmark']);
+        $this->assertSame(['1 matrimonial'], $info['rooms'][0]['beds']);
+        $this->assertSame(24, $info['rooms'][0]['size_m2']);
+
+        $cancellation = collect($info['cancellation'])->pluck('description', 'rate');
+        $this->assertSame(
+            'Cancelación sin cargo hasta 3 días antes del check-in; después se cobra el 50% de la reserva.',
+            $cancellation['Tarifa flexible'],
+        );
+        $this->assertSame('No admite cancelación sin cargo.', $cancellation['Tarifa no reembolsable']);
     }
 
     #[Test]

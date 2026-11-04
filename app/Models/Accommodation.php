@@ -271,6 +271,9 @@ class Accommodation extends Model
         return $this->hasMany(PlanChangeRequest::class);
     }
 
+    /** Motor en modo solicitud: el hotel confirma cada reserva desde el PMS. */
+    public const BOOKING_REQUEST = 'request';
+
     /** Habitaciones del Free: tope también para planes legacy sin la feature `rooms`. */
     public const FREE_ROOM_LIMIT = 10;
 
@@ -328,6 +331,12 @@ class Accommodation extends Model
     public function services()
     {
         return $this->belongsToMany(Service::class, AccommodationService::class, 'accommodation_id', 'service_id');
+    }
+
+    /** Condiciones de cancelación y no-show por tipo de tarifa (una fila por `rate_type`). */
+    public function ratePolicies()
+    {
+        return $this->hasMany(AccommodationRatePolicy::class);
     }
 
     public function policies()

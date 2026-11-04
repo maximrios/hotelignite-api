@@ -16,7 +16,7 @@ class SearchAccommodationRatePolicyRequest extends FormRequest
     {
         return [
             'accommodation_id' => ['sometimes', 'integer', 'exists:accommodations,id'],
-            'rate_type'        => ['sometimes', Rule::in(['flexible', 'semi_flexible', 'non_refundable'])],
+            'rate_type'        => ['sometimes', Rule::in(\App\Models\AccommodationRatePolicy::TYPES)],
             'limit'            => ['sometimes', 'integer', 'min:1', 'max:100'],
             'offset'           => ['sometimes', 'integer', 'min:0'],
         ];

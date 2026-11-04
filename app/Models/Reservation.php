@@ -12,6 +12,8 @@ class Reservation extends Model
     use BelongsToAccommodation, HasUuids;
 
     /** Fila de `reservations_status` (catálogo legacy). */
+    public const STATUS_PENDING = 1;
+
     public const STATUS_CONFIRMED = 2;
 
     public const STATUS_CHECKIN = 4;
@@ -46,6 +48,8 @@ class Reservation extends Model
         'currency',
         'commission_amount',
         'guarantee_type',
+        'booking_group_id',
+        'request_expires_at',
         'deposit_amount',
         'deposit_date',
         'cancelled_at',
@@ -69,7 +73,47 @@ class Reservation extends Model
         'booked_checkout_date' => 'date',
         'nightly_rates' => 'array',
         'rate_is_manual' => 'boolean',
+        'request_expires_at' => 'datetime',
     ];
+
+    /** Columnas legacy NOT NULL que el modelo no expone como fillable. */
+    public function fillLegacyColumns(Carbon $checkin, Carbon $checkout, int $nights, string $currency, int $userId): void
+    {
+        $this->forceFill([
+            'arrival' => $checkin->toDateString(),
+            'departure' => $checkout->toDateString(),
+            'nights' => $nights,
+            'currency_id' => $currency,
+            'language_id' => 'es',
+            'package_id' => 0,
+            'payment_method_id' => 0,
+            'reservation_type' => 1,
+            'created' => now(),
+            'modified' => now(),
+            'user_created' => $userId,
+        ]);
+    }
+
+    /** Solicitud del motor que el hotel todavía no respondió. */
+    public function isPendingConfirmation(): bool
+    {
+        return (int) $this->status_id === self::STATUS_PENDING && $this->cancelled_at === null;
+    }
+
+    /**
+     * Reservas de la misma solicitud: las que siguen pendientes se responden
+     * juntas (todo o nada). Sin grupo, sólo ella.
+     *
+     * @return \Illuminate\Support\Collection<int, self>
+     */
+    public function bookingGroup(): \Illuminate\Support\Collection
+    {
+        if ($this->booking_group_id === null) {
+            return collect([$this]);
+        }
+
+        return self::where('booking_group_id', $this->booking_group_id)->orderBy('created_at')->orderBy('id')->get();
+    }
 
     public function accommodation()
     {
@@ -210,7 +254,10 @@ class Reservation extends Model
     {
         $checkin = $this->effectiveCheckin();
 
-        return $this->derivedStatus() === 'arriving' && $checkin !== null && $checkin->lte(self::today());
+        return $this->derivedStatus() === 'arriving'
+            && ! $this->isPendingConfirmation()
+            && $checkin !== null
+            && $checkin->lte(self::today());
     }
 
     /** Tiene check-in y la salida ya pasó sin registrarse. */
@@ -239,6 +286,13 @@ class Reservation extends Model
 
         if (! in_array($status, ['out', 'cancelled', 'no_show'], true)) {
             $actions[] = 'edit';
+        }
+
+        if ($this->isPendingConfirmation() && $status === 'arriving') {
+            $actions[] = 'confirm_request';
+            $actions[] = 'cancel';
+
+            return $actions;
         }
 
         if ($status === 'arriving') {

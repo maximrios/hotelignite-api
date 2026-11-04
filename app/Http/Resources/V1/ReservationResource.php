@@ -4,6 +4,7 @@ namespace App\Http\Resources\V1;
 
 use App\Repositories\ReservationRepository;
 use App\Repositories\TravelerRepository;
+use App\Models\Reservation;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -25,6 +26,9 @@ class ReservationResource extends JsonResource
         return [
             'id' => $this->id,
             'accommodation_id' => $this->accommodation_id,
+            'pending_confirmation' => $this->isPendingConfirmation(),
+            'request_expires_at' => $this->request_expires_at?->toIso8601String(),
+            'booking_group_size' => $this->booking_group_id === null ? 1 : Reservation::where('booking_group_id', $this->booking_group_id)->count(),
             'code' => $this->confirmation_number ?? $this->source_reference ?? (string) $this->id,
             'guest' => $this->guest?->full_name,
             'guest_first_name' => $this->guest?->first_name,

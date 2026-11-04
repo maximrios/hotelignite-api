@@ -9,6 +9,7 @@ use App\AI\Support\RoomTypeResolver;
 use App\Models\Accommodation;
 use App\Models\Rate;
 use App\Models\RoomAvailability;
+use App\Support\RoomInventory;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
 use Throwable;
@@ -162,8 +163,14 @@ final class CheckAvailabilityService
     }
 
     /**
-     * Recorre las noches: con filas en `room_availabilities` decide el dato real;
-     * sin filas, el mock (si está habilitado) o `unknown`.
+     * Los tipos con **habitaciones físicas** se deciden como en el motor de
+     * reservas (`RoomInventory`): hay lugar si alguna habitación está libre toda
+     * la estadía y el hotel no cerró esas fechas. `room_availability` ahí es sólo
+     * la grilla de cierres: sin filas, está abierto.
+     *
+     * Los tipos sin habitaciones cargadas siguen como antes: noche por noche con
+     * las filas de `room_availability`; sin filas, el mock (si está habilitado) o
+     * `unknown`.
      *
      * @param  list<array{id: ?int, name: string, max_occupancy: ?int, source: string}>  $fitting
      * @return array{0: 'available'|'unavailable'|'unknown', 1: bool}
@@ -171,7 +178,24 @@ final class CheckAvailabilityService
     private function nightlyStatus(Accommodation $accommodation, array $fitting, CarbonImmutable $from, CarbonImmutable $to): array
     {
         $realIds = array_values(array_filter(array_column($fitting, 'id')));
-        $mockEnabled = MockInventory::enabled();
+        $withRooms = array_values(array_filter($realIds, fn (int $id): bool => RoomInventory::hasRooms($id)));
+
+        foreach ($withRooms as $id) {
+            if (! RoomInventory::isClosed($id, $from, $to) && RoomInventory::freeRooms($id, $from, $to)->isNotEmpty()) {
+                return ['available', false];
+            }
+        }
+
+        if ($withRooms !== []) {
+            $realIds = array_values(array_diff($realIds, $withRooms));
+
+            // Todo el inventario real está ocupado o cerrado y no queda otra cosa que mirar.
+            if ($realIds === []) {
+                return ['unavailable', false];
+            }
+        }
+
+        $mockEnabled = MockInventory::enabled() && $withRooms === [];
 
         $rows = $realIds === [] ? collect() : RoomAvailability::query()
             ->whereIn('room_type_id', $realIds)

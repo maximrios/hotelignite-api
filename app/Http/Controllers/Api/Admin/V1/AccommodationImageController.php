@@ -8,17 +8,24 @@ use App\Http\Resources\Admin\ImageResource;
 use App\Http\Requests\Admin\StoreAccommodationImageRequest;
 use App\Http\Requests\Admin\UpdateAccommodationImageRequest;
 use App\Http\Requests\Admin\ReorderAccommodationImagesRequest;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Routing\Controller as BaseController;
 
 class AccommodationImageController extends BaseController
 {
+    use AuthorizesRequests;
+
     public function index(Accommodation $accommodation)
     {
+        $this->authorize('view', $accommodation);
+
         return ImageResource::collection($accommodation->images);
     }
 
     public function store(StoreAccommodationImageRequest $request, Accommodation $accommodation)
     {
+        $this->authorize('update', $accommodation);
+
         $data = $request->validated();
         $data['order'] ??= $accommodation->images()->max('order') + 1;
 
@@ -29,6 +36,8 @@ class AccommodationImageController extends BaseController
 
     public function update(UpdateAccommodationImageRequest $request, Accommodation $accommodation, Image $image)
     {
+        $this->authorize('update', $accommodation);
+
         $this->abortIfNotOwned($accommodation, $image);
 
         $image->update($request->validated());
@@ -38,6 +47,8 @@ class AccommodationImageController extends BaseController
 
     public function reorder(ReorderAccommodationImagesRequest $request, Accommodation $accommodation)
     {
+        $this->authorize('update', $accommodation);
+
         $ids = collect($request->validated('images'))->pluck('id');
 
         $accommodation->images()->whereIn('id', $ids)->get()
@@ -52,6 +63,8 @@ class AccommodationImageController extends BaseController
 
     public function destroy(Accommodation $accommodation, Image $image)
     {
+        $this->authorize('update', $accommodation);
+
         $this->abortIfNotOwned($accommodation, $image);
 
         $image->delete();

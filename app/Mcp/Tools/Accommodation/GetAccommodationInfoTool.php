@@ -12,7 +12,7 @@ use Laravel\Mcp\Server\Attributes\Name;
 use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('get_accommodation_info')]
-#[Description('Ficha de este alojamiento: descripción, dirección, servicios, habitaciones con capacidad, políticas (check-in/out, niños, mascotas, medios de pago, normas) e imágenes. Si algo no figura, no lo inventes: ofrecé dejar la consulta al alojamiento.')]
+#[Description('Ficha de este alojamiento: categoría (estrellas), descripción, dirección y cómo llegar (referencia y link de mapa), servicios, habitaciones (capacidad, camas, tamaño y servicios de cada una), políticas (check-in/out, niños, mascotas, fumar, fiestas, medios de pago, normas), condiciones de cancelación por tarifa, lugares cercanos e imágenes. Si algo no figura, no lo inventes: ofrecé dejar la consulta al alojamiento.')]
 #[IsReadOnly]
 class GetAccommodationInfoTool extends AccommodationTool
 {

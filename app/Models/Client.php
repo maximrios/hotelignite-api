@@ -262,11 +262,11 @@ class Client extends Model
                 'pitch' => ':client te invita a sumar :accommodation como socio de la cámara.',
             ],
             default => [
-                'agreed' => 'Con convenio',
-                'not_agreed' => 'Sin convenio',
-                'action' => 'Invitar a convenio',
-                'invite_subject' => ':client te propone un convenio',
-                'pitch' => ':client quiere trabajar con :accommodation y te propone un convenio.',
+                'agreed' => 'En la red',
+                'not_agreed' => 'Fuera de la red',
+                'action' => 'Invitar a la red',
+                'invite_subject' => ':client te invita a su red',
+                'pitch' => ':client te invita a sumar :accommodation a su red de alojamientos.',
             ],
         };
     }

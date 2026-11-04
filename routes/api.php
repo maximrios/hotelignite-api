@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\Admin\V1\AccommodationAgentController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationApiKeyController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationChannelController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationController;
@@ -51,6 +52,7 @@ use App\Http\Controllers\Api\V1\AccommodationAvailabilityController;
 use App\Http\Controllers\Api\V1\AccommodationBillingController;
 use App\Http\Controllers\Api\V1\AccommodationController as WebAccommodationController;
 use App\Http\Controllers\Api\V1\AccommodationDescriptionController;
+use App\Http\Controllers\Api\Admin\V1\AccommodationPoliciesController as AdminAccommodationPoliciesController;
 use App\Http\Controllers\Api\V1\AccommodationPolicyController;
 use App\Http\Controllers\Api\V1\AccommodationPolicyOldController;
 use App\Http\Controllers\Api\V1\AccommodationPolicyTranslationController;
@@ -59,6 +61,7 @@ use App\Http\Controllers\Api\V1\AccommodationServiceController as WebAccommodati
 use App\Http\Controllers\Api\V1\AccommodationTypeController as WebAccommodationTypeController;
 use App\Http\Controllers\Api\V1\AccountTypeController;
 use App\Http\Controllers\Api\V1\BookingController;
+use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\ChannelController;
 use App\Http\Controllers\Api\V1\CityController as WebCityController;
 use App\Http\Controllers\Api\V1\HousekeepingController;
@@ -315,6 +318,10 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::put('accommodation-types/{type}', [AccommodationTypeController::class, 'update'])->name('admin.accommodation-types.update');
             Route::delete('accommodation-types/{type}', [AccommodationTypeController::class, 'destroy'])->name('admin.accommodation-types.destroy');
 
+            // Pestaña Políticas del PMS (generales, reglas de la casa y cancelación por tarifa).
+            Route::get('accommodations/{accommodation}/policies', [AdminAccommodationPoliciesController::class, 'show'])->name('admin.accommodations.policies.show');
+            Route::put('accommodations/{accommodation}/policies', [AdminAccommodationPoliciesController::class, 'update'])->name('admin.accommodations.policies.update');
+
             Route::get('accommodations/{accommodation}/services', [AccommodationServiceController::class, 'index'])->name('admin.accommodations.services.index');
             Route::post('accommodations/{accommodation}/services', [AccommodationServiceController::class, 'store'])->name('admin.accommodations.services.store');
             Route::put('accommodations/{accommodation}/services', [AccommodationServiceController::class, 'update'])->name('admin.accommodations.services.sync');
@@ -349,6 +356,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::get('accommodations/{accommodation}/api-keys', [AccommodationApiKeyController::class, 'index'])->name('admin.accommodations.api-keys.index');
             Route::post('accommodations/{accommodation}/api-keys', [AccommodationApiKeyController::class, 'store'])->name('admin.accommodations.api-keys.store');
             Route::delete('accommodations/{accommodation}/api-keys/{key}', [AccommodationApiKeyController::class, 'destroy'])->name('admin.accommodations.api-keys.destroy');
+
+            // Agentes IA del alojamiento (motor: Colmexa). Ver docs/ai-agents-plan.md.
+            Route::get('accommodations/{accommodation}/agents', [AccommodationAgentController::class, 'index'])->name('admin.accommodations.agents.index');
+            Route::put('accommodations/{accommodation}/agents/{agent}', [AccommodationAgentController::class, 'update'])->name('admin.accommodations.agents.update');
+            Route::delete('accommodations/{accommodation}/agents/{agent}', [AccommodationAgentController::class, 'destroy'])->name('admin.accommodations.agents.destroy');
+            // "Abrir bandeja": enlace de un solo uso a inbox.hotelignite.com.
+            Route::post('accommodations/{accommodation}/inbox-link', [AccommodationAgentController::class, 'inboxLink'])->name('admin.accommodations.inbox-link');
 
             // Gestión de clients B2B y sus API keys — solo plataforma (F4).
             Route::middleware('platform')->group(function () {
@@ -545,6 +559,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
         Route::get('reservations/{id}', [ReservationController::class, 'show'])->whereUuid('id')->name('reservations.show');
         Route::put('reservations/{id}/travelers', [ReservationController::class, 'updateTravelers'])->name('reservations.travelers');
         Route::patch('reservations/{id}', [ReservationController::class, 'update'])->name('reservations.update');
+        Route::post('reservations/{id}/confirm', [ReservationController::class, 'confirmRequest'])->name('reservations.confirm');
         Route::post('reservations/{id}/cancel', [ReservationController::class, 'cancel'])->name('reservations.cancel');
         // Recepción. DELETE deshace el hecho registrado (error de mostrador).
         Route::post('reservations/{id}/check-in', [ReservationController::class, 'checkIn'])->name('reservations.check-in');
@@ -600,6 +615,23 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
         Route::post('housekeeping/rooms/{id}/resolve', [HousekeepingController::class, 'resolve'])->whereNumber('id')->name('housekeeping.rooms.resolve');
         Route::post('housekeeping/rooms/{id}/dnd', [HousekeepingController::class, 'dnd'])->whereNumber('id')->name('housekeeping.rooms.dnd');
         Route::get('housekeeping/rooms/{id}/events', [HousekeepingController::class, 'events'])->whereNumber('id')->name('housekeeping.rooms.events');
+
+        // Caja del PMS (plan Básico en adelante): turnos, libro, cobros de reservas, reportes.
+        Route::get('cash', [CashController::class, 'overview'])->name('cash.overview');
+        Route::get('cash/shifts', [CashController::class, 'shifts'])->name('cash.shifts.index');
+        Route::post('cash/shifts', [CashController::class, 'open'])->name('cash.shifts.open');
+        Route::get('cash/shifts/{id}', [CashController::class, 'shift'])->whereNumber('id')->name('cash.shifts.show');
+        Route::post('cash/shifts/{id}/close', [CashController::class, 'close'])->whereNumber('id')->name('cash.shifts.close');
+        Route::get('cash/entries', [CashController::class, 'entries'])->name('cash.entries.index');
+        Route::get('cash/entries/export', [CashController::class, 'export'])->name('cash.entries.export');
+        Route::post('cash/entries', [CashController::class, 'record'])->name('cash.entries.store');
+        Route::post('cash/entries/{id}/reverse', [CashController::class, 'reverse'])->whereNumber('id')->name('cash.entries.reverse');
+        Route::get('cash/report', [CashController::class, 'report'])->name('cash.report');
+        Route::get('cash/receivables', [CashController::class, 'receivables'])->name('cash.receivables');
+        Route::get('cash/reservations/{id}', [CashController::class, 'reservation'])->name('cash.reservations.show');
+        Route::get('cash/categories', [CashController::class, 'categories'])->name('cash.categories.index');
+        Route::post('cash/categories', [CashController::class, 'storeCategory'])->name('cash.categories.store');
+        Route::patch('cash/categories/{id}', [CashController::class, 'updateCategory'])->whereNumber('id')->name('cash.categories.update');
 
         Route::get('rooms', [RoomController::class, 'index'])->name('rooms.index');
         Route::get('rooms/{id}', [RoomController::class, 'show'])->name('rooms.show');

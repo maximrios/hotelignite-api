@@ -93,6 +93,7 @@ class Kernel extends HttpKernel
         'auth.accommodation' => AuthenticateAccommodationKey::class,
         'accommodation.ability' => EnsureAccommodationAbility::class,
         'json.response' => ForceJsonResponse::class,
+        'auth.booking' => \App\Http\Middleware\AuthenticateBookingEngine::class,
         'client.readonly' => EnsureNotReadOnlyClient::class,
         'client.user' => EnsureClientUser::class,
         'platform' => EnsurePlatform::class,

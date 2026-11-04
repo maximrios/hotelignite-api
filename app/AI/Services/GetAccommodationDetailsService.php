@@ -8,6 +8,9 @@ use App\AI\Support\AiContext;
 use App\AI\Support\RoomTypeResolver;
 use App\Models\Accommodation;
 use App\Models\AccommodationPolicy;
+use App\Models\AccommodationRatePolicy;
+use App\Models\RoomType;
+use App\Repositories\PointOfInterestRepository;
 use Illuminate\Support\Str;
 
 /**
@@ -21,7 +24,36 @@ final class GetAccommodationDetailsService
 
     private const MAX_IMAGES = 3;
 
-    public function __construct(private readonly RoomTypeResolver $rooms) {}
+    private const ROOM_DESCRIPTION_MAX_CHARS = 300;
+
+    /** Cercanos por categoría raíz: el modelo necesita referencias, no el mapa entero. */
+    private const NEARBY_PER_GROUP = 3;
+
+    /** Relaciones de la ficha además de las de `AccommodationMapper::EAGER`. */
+    private const DETAIL_EAGER = ['roomTypes.descriptions', 'roomTypes.beds', 'roomTypes.services', 'ratePolicies'];
+
+    private const BED_NAMES = [
+        'king' => 'king',
+        'queen' => 'queen',
+        'double' => 'matrimonial',
+        'twin' => 'twin',
+        'single' => 'individual',
+        'sofa_bed' => 'sofá cama',
+        'bunk_bed' => 'cucheta',
+        'crib' => 'cuna',
+    ];
+
+    private const RATE_TYPE_NAMES = [
+        'flexible' => 'Tarifa flexible',
+        'moderate' => 'Tarifa moderada',
+        'strict' => 'Tarifa estricta',
+        'non_refundable' => 'Tarifa no reembolsable',
+    ];
+
+    public function __construct(
+        private readonly RoomTypeResolver $rooms,
+        private readonly PointOfInterestRepository $pointsOfInterest,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -31,7 +63,7 @@ final class GetAccommodationDetailsService
         $accommodation = Accommodation::visibleTo($ctx->actor)
             ->where('enabled', 1)
             ->where('slug', $slug)
-            ->with([...AccommodationMapper::EAGER, 'roomTypes.descriptions'])
+            ->with([...AccommodationMapper::EAGER, ...self::DETAIL_EAGER])
             ->first();
 
         if ($accommodation === null) {
@@ -52,7 +84,7 @@ final class GetAccommodationDetailsService
     {
         $accommodation = $ctx->accommodation === null ? null : Accommodation::visibleTo($ctx->actor)
             ->where('enabled', 1)
-            ->with([...AccommodationMapper::EAGER, 'roomTypes.descriptions'])
+            ->with([...AccommodationMapper::EAGER, ...self::DETAIL_EAGER])
             ->find($ctx->accommodation->id);
 
         if ($accommodation === null) {
@@ -68,23 +100,30 @@ final class GetAccommodationDetailsService
     private function render(AiContext $ctx, Accommodation $accommodation): array
     {
         $text = AccommodationMapper::fullDescription($accommodation, $ctx->language);
+        $nearby = $this->pointsOfInterest->nearby($accommodation, self::NEARBY_PER_GROUP);
+        $roomTypes = $accommodation->roomTypes->keyBy('id');
 
         return [
             'id' => (int) $accommodation->id,
             'slug' => (string) $accommodation->slug,
             'name' => (string) $accommodation->name,
             'type' => $accommodation->type?->name,
+            'stars' => $accommodation->stars ? (int) $accommodation->stars : null,
             'city' => $accommodation->city?->name,
             'state' => $accommodation->state?->name ?? $accommodation->city?->state?->name,
             'address' => $accommodation->address,
+            'location' => $this->location($accommodation, $nearby['origin']),
             'description' => $text !== null ? Str::limit($text, self::DESCRIPTION_MAX_CHARS) : null,
             'services' => AccommodationMapper::serviceNames($accommodation),
             'rooms' => array_map(fn (array $room) => [
                 'name' => $room['name'],
                 'max_occupancy' => $room['max_occupancy'],
                 'occupancy_source' => $room['source'],
+                ...$this->roomDetails($room['id'] !== null ? $roomTypes->get($room['id']) : null, $ctx->language),
             ], $this->rooms->forAccommodation($accommodation, $ctx->language)),
             'policies' => $this->policies($accommodation, $ctx->language),
+            'cancellation' => $this->cancellation($accommodation),
+            'nearby' => $this->nearby($nearby['groups']),
             'images' => $accommodation->images
                 ->take(self::MAX_IMAGES)
                 ->map(fn ($image) => ['url' => $image->url, 'alt' => $image->alt])
@@ -124,6 +163,7 @@ final class GetAccommodationDetailsService
             : 'No se aceptan'];
         $items[] = ['name' => 'Mascotas', 'description' => $policy->allow_pets ? 'Se aceptan' : 'No se aceptan'];
         $items[] = ['name' => 'Fumar', 'description' => $policy->allow_smoking ? 'Permitido' : 'No permitido'];
+        $items[] = ['name' => 'Fiestas y eventos', 'description' => $policy->allow_parties ? 'Permitidos' : 'No permitidos'];
 
         if ($policy->min_age) {
             $items[] = ['name' => 'Edad mínima del titular', 'description' => "{$policy->min_age} años"];
@@ -148,6 +188,126 @@ final class GetAccommodationDetailsService
         }
 
         return $items;
+    }
+
+    /**
+     * Cómo llegar. Las coordenadas salen de `location` (la columna validada que
+     * usa PostGIS), no de `latitude`/`longitude`, que son varchar legacy con
+     * basura en algunas fichas.
+     *
+     * @param  array{latitude: float, longitude: float}|null  $origin
+     * @return array{landmark: ?string, postal_code: ?string, maps_url: ?string}
+     */
+    private function location(Accommodation $accommodation, ?array $origin): array
+    {
+        $landmark = trim((string) $accommodation->landmark);
+        $postalCode = trim((string) $accommodation->postal_code);
+
+        return [
+            'landmark' => $landmark !== '' ? $landmark : null,
+            'postal_code' => $postalCode !== '' ? $postalCode : null,
+            'maps_url' => $origin !== null
+                ? sprintf('https://www.google.com/maps/search/?api=1&query=%.6f,%.6f', $origin['latitude'], $origin['longitude'])
+                : null,
+        ];
+    }
+
+    /**
+     * Lo que distingue a un tipo de habitación de otro cuando el huésped
+     * pregunta "¿qué cama tiene?" o "¿tiene aire?". Vacío en los simulados.
+     *
+     * @return array<string, mixed>
+     */
+    private function roomDetails(?RoomType $roomType, string $language): array
+    {
+        if ($roomType === null) {
+            return [];
+        }
+
+        $translation = $roomType->descriptions->firstWhere('language_id', $language)
+            ?? $roomType->descriptions->first();
+        $description = AccommodationMapper::plain((string) $translation?->description);
+
+        return [
+            'size_m2' => $roomType->size ? (int) $roomType->size : null,
+            'max_adults' => $roomType->max_adults ? (int) $roomType->max_adults : null,
+            'max_children' => $roomType->max_children !== null ? (int) $roomType->max_children : null,
+            'beds' => $roomType->beds
+                ->map(fn ($bed) => sprintf('%d %s', (int) $bed->quantity, self::BED_NAMES[$bed->type] ?? $bed->type))
+                ->values()
+                ->all(),
+            'services' => $roomType->services->pluck('name')->filter()->values()->all(),
+            'description' => $description !== '' ? Str::limit($description, self::ROOM_DESCRIPTION_MAX_CHARS) : null,
+        ];
+    }
+
+    /**
+     * Condiciones de cancelación por tipo de tarifa, en texto. Vacía si el
+     * alojamiento no las cargó: el agente no puede suponer que es flexible.
+     *
+     * @return list<array{rate: string, description: string}>
+     */
+    private function cancellation(Accommodation $accommodation): array
+    {
+        return $accommodation->ratePolicies
+            ->map(fn (AccommodationRatePolicy $policy) => [
+                'rate' => self::RATE_TYPE_NAMES[$policy->rate_type] ?? (string) $policy->rate_type,
+                'description' => $this->cancellationText($policy),
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function cancellationText(AccommodationRatePolicy $policy): string
+    {
+        if ($policy->rate_type === 'non_refundable') {
+            $text = 'No admite cancelación sin cargo.';
+        } elseif ($policy->cancel_days !== null) {
+            $text = "Cancelación sin cargo hasta {$policy->cancel_days} días antes del check-in";
+            $text .= $policy->cancel_penalty !== null
+                ? sprintf('; después se cobra el %s%% de la reserva.', $this->percent($policy->cancel_penalty))
+                : '.';
+        } else {
+            $text = 'Condiciones de cancelación a consultar con el alojamiento.';
+        }
+
+        if ($policy->no_show_penalty !== null) {
+            $text .= sprintf(' Si no se presenta, se cobra el %s%%.', $this->percent($policy->no_show_penalty));
+        }
+
+        return $text;
+    }
+
+    private function percent(float $value): string
+    {
+        return rtrim(rtrim(number_format($value, 2, ',', ''), '0'), ',');
+    }
+
+    /**
+     * "En los alrededores", compacto: nombre, categoría y distancia. Sin
+     * teléfono ni web: el agente da referencias, no reemplaza a un buscador.
+     *
+     * @param  list<array{category: mixed, items: list<mixed>}>  $groups
+     * @return list<array{category: string, places: list<array{name: string, distance: string}>}>
+     */
+    private function nearby(array $groups): array
+    {
+        return array_map(fn (array $group) => [
+            'category' => (string) $group['category']->resource->name,
+            'places' => array_map(function ($item) {
+                $poi = $item->resource;
+                $meters = (float) $poi->distance_m;
+
+                return [
+                    'name' => (string) $poi->name,
+                    'distance' => match (true) {
+                        $poi->walk_min !== null => "{$poi->walk_min} min a pie",
+                        $meters < 1000 => sprintf('%d m', (int) round($meters)),
+                        default => sprintf('%s km', number_format($meters / 1000, 1, ',', '')),
+                    },
+                ];
+            }, $group['items']),
+        ], $groups);
     }
 
     private function range(?string $from, ?string $to): string

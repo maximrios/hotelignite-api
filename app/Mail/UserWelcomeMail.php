@@ -82,7 +82,7 @@ class UserWelcomeMail extends Mailable implements ShouldQueue
         return match ($client?->type) {
             Client::TYPE_GOVERNMENT => 'Desde ahí vas a ver el padrón de alojamientos de tu destino, invitar a los que faltan y seguir el estado de cada adhesión.',
             Client::TYPE_CHAMBER => 'Desde ahí vas a ver los alojamientos de la cámara, invitar a nuevos socios y seguir el estado de cada uno.',
-            default => 'Desde ahí vas a ver los alojamientos con los que trabajan, su disponibilidad y el estado de cada convenio, todo en un mismo lugar.',
+            default => 'Desde ahí vas a ver los alojamientos con los que trabajan, su disponibilidad y el estado de cada vínculo, todo en un mismo lugar.',
         };
     }
 
