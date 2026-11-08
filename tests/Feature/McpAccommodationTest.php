@@ -9,6 +9,7 @@ use App\Models\AccommodationRatePolicy;
 use App\Models\Account;
 use App\Models\Client;
 use App\Models\ClientApiKey;
+use App\Models\Extra;
 use App\Models\Feature;
 use App\Models\Inquiry;
 use App\Models\Plan;
@@ -92,6 +93,25 @@ class McpAccommodationTest extends TestCase
 
         $this->assertSame($this->acc->id, $info['id']);
         $this->assertSame('Hostería del Cerro', $info['name']);
+    }
+
+    #[Test]
+    public function la_ficha_trae_los_extras_activos_con_precio(): void
+    {
+        Extra::create(['accommodation_id' => $this->acc->id, 'template' => 'parking', 'name' => 'Cochera', 'price' => 600000, 'charge_mode' => Extra::MODE_NIGHT, 'max_quantity' => 2, 'requires_confirmation' => false, 'image_url' => 'https://res.cloudinary.com/x/cochera.jpg']);
+        Extra::create(['accommodation_id' => $this->acc->id, 'template' => 'breakfast', 'name' => 'Desayuno', 'price' => 450000, 'charge_mode' => Extra::MODE_PERSON_NIGHT]);
+        Extra::create(['accommodation_id' => $this->acc->id, 'name' => 'Pausado', 'price' => 100, 'charge_mode' => Extra::MODE_STAY, 'enabled' => false]);
+
+        $extras = $this->tool('get_accommodation_info')['extras'];
+
+        $this->assertSame(['Cochera', 'Desayuno'], array_column($extras, 'name'));
+        $this->assertEquals(6000, $extras[0]['price']);
+        $this->assertSame('por noche', $extras[0]['charge']);
+        $this->assertSame(2, $extras[0]['max_per_booking']);
+        $this->assertFalse($extras[0]['subject_to_availability']);
+        $this->assertSame('https://res.cloudinary.com/x/cochera.jpg', $extras[0]['image']);
+        $this->assertSame('por persona y noche', $extras[1]['charge']);
+        $this->assertNotNull($extras[1]['note']);
     }
 
     #[Test]

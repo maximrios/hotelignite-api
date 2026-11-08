@@ -9,8 +9,10 @@ use App\AI\Support\RoomTypeResolver;
 use App\Models\Accommodation;
 use App\Models\AccommodationPolicy;
 use App\Models\AccommodationRatePolicy;
+use App\Models\Extra;
 use App\Models\RoomType;
 use App\Repositories\PointOfInterestRepository;
+use App\Support\BookingMailData;
 use Illuminate\Support\Str;
 
 /**
@@ -30,7 +32,7 @@ final class GetAccommodationDetailsService
     private const NEARBY_PER_GROUP = 3;
 
     /** Relaciones de la ficha además de las de `AccommodationMapper::EAGER`. */
-    private const DETAIL_EAGER = ['roomTypes.descriptions', 'roomTypes.beds', 'roomTypes.services', 'ratePolicies'];
+    private const DETAIL_EAGER = ['roomTypes.descriptions', 'roomTypes.beds', 'roomTypes.services', 'ratePolicies', 'extras'];
 
     private const BED_NAMES = [
         'king' => 'king',
@@ -123,6 +125,7 @@ final class GetAccommodationDetailsService
             ], $this->rooms->forAccommodation($accommodation, $ctx->language)),
             'policies' => $this->policies($accommodation, $ctx->language),
             'cancellation' => $this->cancellation($accommodation),
+            'extras' => $this->extras($accommodation),
             'nearby' => $this->nearby($nearby['groups']),
             'images' => $accommodation->images
                 ->take(self::MAX_IMAGES)
@@ -130,6 +133,38 @@ final class GetAccommodationDetailsService
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Extras que vende el hotel (cochera, desayuno, traslado…), sólo los activos. Distintos
+     * de `services`: aquellos son lo que el lugar tiene; estos se pagan aparte. Se piden al
+     * reservar en el motor; por acá sólo se informan.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function extras(Accommodation $accommodation): array
+    {
+        $currency = strlen(trim((string) $accommodation->currency_id)) === 3 ? strtoupper(trim((string) $accommodation->currency_id)) : 'ARS';
+
+        return $accommodation->extras
+            ->where('enabled', true)
+            ->map(fn (Extra $extra) => [
+                'name' => $extra->name,
+                'description' => $extra->description,
+                'price' => $extra->price / 100,
+                'currency' => $currency,
+                'charge' => BookingMailData::chargeMode($extra->charge_mode),
+                'free' => $extra->price === 0,
+                'price_includes_tax' => $extra->price_includes_tax,
+                'max_per_booking' => $extra->max_quantity,
+                'subject_to_availability' => $extra->requires_confirmation,
+                'note' => $extra->template === Extra::TEMPLATE_BREAKFAST
+                    ? 'Si la tarifa elegida ya incluye desayuno, no se cobra aparte.'
+                    : null,
+                'image' => $extra->image_url,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

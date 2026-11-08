@@ -3,12 +3,13 @@
 namespace App\Mail;
 
 use App\Models\Reservation;
+use App\Support\BookingMailData;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
 
-/** Aviso al hotel: entró una solicitud por el motor y espera su confirmación. */
+/** Aviso al hotel, con la marca de HotelIgnite: entró una solicitud por el motor o venció una. */
 class BookingRequestReceivedMail extends Mailable implements ShouldQueue
 {
     use Queueable;
@@ -23,19 +24,31 @@ class BookingRequestReceivedMail extends Mailable implements ShouldQueue
 
     public function build(): self
     {
-        $this->reservation->loadMissing(['guest', 'accommodation']);
-
+        $data = BookingMailData::for($this->reservation);
+        $guest = $this->reservation->guest;
         $code = $this->reservation->confirmation_number;
+        $attribution = array_filter((array) ($this->reservation->attribution ?? []));
 
-        return $this->subject($this->expired ? "Venció la solicitud {$code}" : "Nueva solicitud de reserva {$code}")
-            ->markdown('emails.booking-request-received', [
-                'reservation' => $this->reservation,
-                'rooms' => $this->reservation->bookingGroup(),
-                'deadline' => $this->reservation->request_expires_at
-                    ?->setTimezone(config('app.destination_timezone'))->format('d/m/Y H:i'),
-                'expired' => $this->expired,
-                'hotel' => (string) $this->reservation->accommodation->name,
-                'url' => config('api.pms_url').'/reservas',
-            ]);
+        // Responder le escribe directo al huésped.
+        if ($guest !== null && filter_var($guest->email, FILTER_VALIDATE_EMAIL)) {
+            $this->replyTo($guest->email, $data['guestName']);
+        }
+
+        $data += [
+            'expired' => $this->expired,
+            'hotel' => (string) $this->reservation->accommodation->name,
+            'guestEmail' => $guest?->email,
+            'guestPhone' => $guest?->phone,
+            'origin' => $attribution === [] ? null : implode(' · ', $attribution),
+            'url' => config('api.pms_url').'/calendario?'.http_build_query([
+                'date' => $this->reservation->checkin_date->toDateString(),
+                'reservation' => $this->reservation->id,
+            ]),
+            'logoUrl' => rtrim((string) config('app.url'), '/').'/brand/mail-mark.png',
+        ];
+
+        return $this->subject($this->expired ? "Venció la solicitud {$code}" : "Nueva solicitud de reserva {$code} · {$data['guestName']}")
+            ->view('emails.booking-request-received', $data)
+            ->text('emails.booking-request-received-text', $data);
     }
 }

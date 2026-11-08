@@ -2,9 +2,10 @@
 
 namespace App\Http\Resources\V1;
 
+use App\Models\Reservation;
+use App\Models\ReservationExtra;
 use App\Repositories\ReservationRepository;
 use App\Repositories\TravelerRepository;
-use App\Models\Reservation;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 /**
@@ -28,6 +29,9 @@ class ReservationResource extends JsonResource
             'accommodation_id' => $this->accommodation_id,
             'pending_confirmation' => $this->isPendingConfirmation(),
             'request_expires_at' => $this->request_expires_at?->toIso8601String(),
+            'booking_group_id' => $this->booking_group_id,
+            // utm_* con los que llegó por el motor de reservas, si los traía.
+            'attribution' => $this->attribution,
             'booking_group_size' => $this->booking_group_id === null ? 1 : Reservation::where('booking_group_id', $this->booking_group_id)->count(),
             'code' => $this->confirmation_number ?? $this->source_reference ?? (string) $this->id,
             'guest' => $this->guest?->full_name,
@@ -67,6 +71,17 @@ class ReservationResource extends JsonResource
             'cancellation_reason' => $this->cancellation_reason,
             'vehicle_plate' => $this->vehicle_plate,
             'vehicle_description' => $this->vehicle_description,
+            // Extras pedidos (motor de reservas), con el precio del momento. Sólo en el detalle.
+            'extras' => $this->whenLoaded('extras', fn () => $this->extras->map(fn (ReservationExtra $line) => [
+                'id' => $line->id,
+                'name' => $line->name,
+                'charge_mode' => $line->charge_mode,
+                'quantity' => $line->quantity,
+                'units' => $line->units,
+                'unit_price' => $line->unit_price / 100,
+                'total' => $line->total_amount / 100,
+                'requires_confirmation' => $line->requires_confirmation,
+            ])->values()),
             // Parte de viajeros: sólo en el detalle (show, check-in, edición).
             'travelers' => $this->whenLoaded('travelers', fn () => $this->travelers->map(fn ($g) => [
                 ...app(TravelerRepository::class)->guestPayload($g),

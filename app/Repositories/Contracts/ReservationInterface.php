@@ -25,7 +25,7 @@ interface ReservationInterface
 
     public function update(string $id, UpdateReservationRequest $request);
 
-    public function confirmRequest(string $id);
+    public function confirmRequest(string $id, bool $notifyGuest = false);
 
     public function cancel(string $id, CancelReservationRequest $request);
 

@@ -38,6 +38,14 @@ class BookingEngineController extends BaseController
         return response()->json(['data' => $this->engine->showHold($this->accommodation($request), $token)]);
     }
 
+    /** El huésped cambia lo que eligió: se libera lo apartado sin esperar los 15 minutos. */
+    public function releaseHold(Request $request, string $slug, string $token): JsonResponse
+    {
+        $this->engine->releaseHold($this->accommodation($request), $token);
+
+        return response()->json(null, 204);
+    }
+
     public function confirm(ConfirmBookingRequest $request, string $slug, string $token): JsonResponse
     {
         return response()->json(['data' => $this->engine->confirm($this->accommodation($request), $token, $request->validated())]);

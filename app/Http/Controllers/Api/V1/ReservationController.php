@@ -28,6 +28,7 @@ class ReservationController extends BaseController
             'from' => ['sometimes', 'date_format:Y-m-d'],
             'to' => ['sometimes', 'date_format:Y-m-d', 'after:from'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:500'],
+            'pending_request' => ['sometimes', 'boolean'],
         ]);
 
         $reservations = $this->reservationInterface->all($request);
@@ -55,9 +56,11 @@ class ReservationController extends BaseController
         return response()->json($this->reservationInterface->update($id, $request), 200);
     }
 
-    public function confirmRequest(string $id)
+    public function confirmRequest(Request $request, string $id)
     {
-        return response()->json($this->reservationInterface->confirmRequest($id), 200);
+        $request->validate(['notify_guest' => ['sometimes', 'boolean']]);
+
+        return response()->json($this->reservationInterface->confirmRequest($id, $request->boolean('notify_guest')), 200);
     }
 
     public function cancel(CancelReservationRequest $request, string $id)

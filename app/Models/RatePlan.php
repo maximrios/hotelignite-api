@@ -81,6 +81,12 @@ class RatePlan extends Model
 
     public function getIncludesBreakfastAttribute(): bool
     {
-        return in_array($this->meal_plan, ['bb', 'hb', 'fb', 'ai']);
+        return $this->includesBreakfast();
+    }
+
+    /** Todo régimen salvo "sólo alojamiento" trae desayuno. */
+    public function includesBreakfast(): bool
+    {
+        return in_array($this->meal_plan, ['bb', 'hb', 'fb', 'ai'], true);
     }
 }

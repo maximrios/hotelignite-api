@@ -15,6 +15,8 @@ class CancelReservationRequest extends FormRequest
     {
         return [
             'reason' => ['nullable', 'string', 'max:255'],
+            // Sólo para solicitudes del motor: avisarle al huésped el rechazo.
+            'notify_guest' => ['sometimes', 'boolean'],
         ];
     }
 }

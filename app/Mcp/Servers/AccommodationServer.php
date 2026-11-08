@@ -17,7 +17,7 @@ use Laravel\Mcp\Server\Attributes\Version;
  */
 #[Name('HotelIgnite Alojamiento')]
 #[Version('0.1.0')]
-#[Instructions('Herramientas para atender a los huéspedes de un único alojamiento, el de la credencial. Contestá sólo sobre este alojamiento: no recomiendes otros. Usá get_accommodation_info para preguntas sobre el lugar (servicios, habitaciones, políticas, dirección) y check_availability cuando haya fechas y cantidad de huéspedes. Precios y disponibilidad salen sólo de las herramientas; si el estado es "unknown", el huésped quiere reservar o un dato no figura, no lo inventes: ofrecé dejarle la consulta al alojamiento con create_inquiry (confirmando antes nombre, teléfono, fechas y personas). Datos con source "mock" son de prueba.')]
+#[Instructions('Herramientas para atender a los huéspedes de un único alojamiento, el de la credencial. Contestá sólo sobre este alojamiento: no recomiendes otros. Usá get_accommodation_info para preguntas sobre el lugar (servicios, habitaciones, políticas, dirección) y sobre extras con costo (cochera, desayuno, traslado, cuna): los servicios vienen incluidos, los extras se pagan aparte y se piden al reservar y check_availability cuando haya fechas y cantidad de huéspedes. Precios y disponibilidad salen sólo de las herramientas; si el estado es "unknown", el huésped quiere reservar o un dato no figura, no lo inventes: ofrecé dejarle la consulta al alojamiento con create_inquiry (confirmando antes nombre, teléfono, fechas y personas). Datos con source "mock" son de prueba.')]
 class AccommodationServer extends Server
 {
     protected array $tools = [

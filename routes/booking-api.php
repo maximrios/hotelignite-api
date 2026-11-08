@@ -12,5 +12,6 @@ Route::middleware(['json.response', 'auth.booking', 'throttle:booking'])->prefix
     Route::get('search', [BookingEngineController::class, 'search'])->name('booking.search');
     Route::post('holds', [BookingEngineController::class, 'hold'])->middleware('throttle:booking-hold')->name('booking.holds.store');
     Route::get('holds/{token}', [BookingEngineController::class, 'showHold'])->name('booking.holds.show');
+    Route::delete('holds/{token}', [BookingEngineController::class, 'releaseHold'])->name('booking.holds.release');
     Route::post('holds/{token}/confirm', [BookingEngineController::class, 'confirm'])->middleware('throttle:booking-hold')->name('booking.holds.confirm');
 });

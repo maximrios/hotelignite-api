@@ -6,6 +6,8 @@ use App\Models\Concerns\BelongsToAccommodation;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Reservation extends Model
 {
@@ -35,6 +37,7 @@ class Reservation extends Model
         'rate_plan_id',
         'confirmation_number',
         'source_reference',
+        'attribution',
         'checkin_date',
         'checkout_date',
         'checkin_time',
@@ -72,6 +75,7 @@ class Reservation extends Model
         'no_show_at' => 'datetime',
         'booked_checkout_date' => 'date',
         'nightly_rates' => 'array',
+        'attribution' => 'array',
         'rate_is_manual' => 'boolean',
         'request_expires_at' => 'datetime',
     ];
@@ -101,12 +105,22 @@ class Reservation extends Model
     }
 
     /**
+     * Si ya descontó cupo de la grilla (`room_availability`). Una solicitud del
+     * motor no lo hace hasta que el hotel la confirma: mientras tanto no bloquea
+     * nada (decisión 2026-11-06). Las pendientes cargadas a mano sí descuentan.
+     */
+    public function holdsInventory(): bool
+    {
+        return ! ($this->isPendingConfirmation() && $this->booking_group_id !== null);
+    }
+
+    /**
      * Reservas de la misma solicitud: las que siguen pendientes se responden
      * juntas (todo o nada). Sin grupo, sólo ella.
      *
-     * @return \Illuminate\Support\Collection<int, self>
+     * @return Collection<int, self>
      */
-    public function bookingGroup(): \Illuminate\Support\Collection
+    public function bookingGroup(): Collection
     {
         if ($this->booking_group_id === null) {
             return collect([$this]);
@@ -118,6 +132,12 @@ class Reservation extends Model
     public function accommodation()
     {
         return $this->belongsTo(Accommodation::class);
+    }
+
+    /** Extras pedidos (en un grupo, cuelgan de la primera reserva). */
+    public function extras(): HasMany
+    {
+        return $this->hasMany(ReservationExtra::class)->orderBy('id');
     }
 
     public function guest()

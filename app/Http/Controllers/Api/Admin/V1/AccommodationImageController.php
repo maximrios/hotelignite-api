@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\Admin\V1;
 
-use App\Models\Accommodation;
-use App\Models\Image;
-use App\Http\Resources\Admin\ImageResource;
+use App\Http\Requests\Admin\ReorderAccommodationImagesRequest;
 use App\Http\Requests\Admin\StoreAccommodationImageRequest;
 use App\Http\Requests\Admin\UpdateAccommodationImageRequest;
-use App\Http\Requests\Admin\ReorderAccommodationImagesRequest;
+use App\Http\Resources\Admin\ImageResource;
+use App\Models\Accommodation;
+use App\Models\Image;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Routing\Controller as BaseController;
 
@@ -27,7 +27,7 @@ class AccommodationImageController extends BaseController
         $this->authorize('update', $accommodation);
 
         $data = $request->validated();
-        $data['order'] ??= $accommodation->images()->max('order') + 1;
+        $data['order'] ??= (int) $accommodation->images()->max('order') + 1;
 
         $image = $accommodation->images()->create($data);
 
@@ -49,16 +49,12 @@ class AccommodationImageController extends BaseController
     {
         $this->authorize('update', $accommodation);
 
-        $ids = collect($request->validated('images'))->pluck('id');
+        $orders = $request->orders();
 
-        $accommodation->images()->whereIn('id', $ids)->get()
-            ->each(function (Image $image) use ($request) {
-                $order = collect($request->validated('images'))
-                    ->firstWhere('id', $image->id)['order'];
-                $image->update(['order' => $order]);
-            });
+        $accommodation->images()->whereIn('id', array_keys($orders))->get()
+            ->each(fn (Image $image) => $image->update(['order' => $orders[$image->id]]));
 
-        return ImageResource::collection($accommodation->images()->orderBy('order')->get());
+        return ImageResource::collection($accommodation->images()->get());
     }
 
     public function destroy(Accommodation $accommodation, Image $image)
@@ -74,7 +70,7 @@ class AccommodationImageController extends BaseController
 
     private function abortIfNotOwned(Accommodation $accommodation, Image $image): void
     {
-        if ($image->imageable_type !== Accommodation::class || $image->imageable_id !== $accommodation->id) {
+        if ($image->imageable_type !== Accommodation::class || (int) $image->imageable_id !== (int) $accommodation->id) {
             abort(404);
         }
     }

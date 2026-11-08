@@ -30,11 +30,13 @@ class BookingHold extends Model
         'expires_at',
         'submitted_at',
         'client_ip',
+        'attribution',
     ];
 
     protected $hidden = ['token_hash'];
 
     protected $casts = [
+        'attribution' => 'array',
         'checkin_date' => 'date',
         'checkout_date' => 'date',
         'expires_at' => 'datetime',

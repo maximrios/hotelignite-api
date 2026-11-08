@@ -24,6 +24,9 @@ interface BookingEngineInterface
     /** @return array<string, mixed> */
     public function showHold(Accommodation $accommodation, string $token): array;
 
+    /** Libera lo apartado. Una solicitud ya enviada no se toca. */
+    public function releaseHold(Accommodation $accommodation, string $token): void;
+
     /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>

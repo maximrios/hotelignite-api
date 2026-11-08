@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
 class Accommodation extends Model
@@ -312,6 +313,12 @@ class Accommodation extends Model
     public function allowsOnlineBookings(): bool
     {
         return $this->hasFeature('booking_engine');
+    }
+
+    /** Extras vendibles (Tarifas → Extras del PMS). */
+    public function extras(): HasMany
+    {
+        return $this->hasMany(Extra::class)->orderBy('sort_order')->orderBy('id');
     }
 
     public function roomTypes()

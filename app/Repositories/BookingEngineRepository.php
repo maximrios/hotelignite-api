@@ -9,15 +9,18 @@ use App\Mail\BookingRequestReceivedMail;
 use App\Models\Accommodation;
 use App\Models\BookingHold;
 use App\Models\BookingHoldRoom;
+use App\Models\Extra;
 use App\Models\Guest;
 use App\Models\RatePlan;
 use App\Models\Reservation;
+use App\Models\ReservationExtra;
 use App\Models\Room;
-use App\Support\RoomInventory;
 use App\Models\RoomType;
 use App\Models\User;
 use App\Repositories\Contracts\BookingEngineInterface;
 use App\Support\BookingDeadline;
+use App\Support\BookingRequestDetails;
+use App\Support\RoomInventory;
 use Carbon\Carbon;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -34,6 +37,11 @@ class BookingEngineRepository implements BookingEngineInterface
 {
     /** Máximo de habitaciones por solicitud online. */
     public const MAX_ROOMS = 4;
+
+    /** Lo mismo que deja cargar el buscador del motor (engine/lib/stay.ts). */
+    public const MAX_ADULTS = 12;
+
+    public const MAX_CHILDREN = 8;
 
     /** Habitaciones apartadas a la vez por visitante. */
     private const MAX_ROOMS_PER_VISITOR = 6;
@@ -60,10 +68,12 @@ class BookingEngineRepository implements BookingEngineInterface
             'slug' => $accommodation->slug,
             'name' => $accommodation->name,
             'logo' => $accommodation->logo,
-            'address' => $accommodation->address,
-            'email' => $accommodation->email,
-            'phone' => $accommodation->phone,
+            // Vacíos y valores de relleno ("0") como null: engine no los muestra.
+            'address' => $accommodation->address ?: null,
+            'email' => $accommodation->email ?: null,
+            'phone' => $accommodation->phone ?: null,
             'web' => $accommodation->web ?: null,
+            'city' => $accommodation->city?->name,
             'mode' => $accommodation->booking_mode,
         ];
     }
@@ -84,7 +94,11 @@ class BookingEngineRepository implements BookingEngineInterface
                 ? (int) $type->max_occupancy > 0
                 : $this->fits($type, $adults, $children));
 
-        $rooms = $types->map(function (RoomType $type) use ($checkin, $checkout, $adults, $children, $requested) {
+        // Tipo sin fotos propias: la tarjeta muestra la portada del hotel antes que un recuadro vacío.
+        $hotelCover = $accommodation->images()->value('url');
+        $fallbackImages = $hotelCover ? [$hotelCover] : [];
+
+        $rooms = $types->map(function (RoomType $type) use ($checkin, $checkout, $adults, $children, $requested, $fallbackImages) {
             $free = $this->freeRooms($type, $checkin, $checkout)->count();
             // Con varias habitaciones se cotiza un reparto parejo; el hold cierra el precio real.
             $perRoomAdults = min((int) ceil($adults / $requested), max(1, (int) $type->max_occupancy));
@@ -103,7 +117,7 @@ class BookingEngineRepository implements BookingEngineInterface
                 'description' => $es?->description,
                 'max_occupancy' => $type->max_occupancy,
                 'size' => $type->size,
-                'images' => $type->images->pluck('url')->filter()->values()->all(),
+                'images' => $type->images->pluck('url')->filter()->values()->all() ?: $fallbackImages,
                 'rooms_left' => $free,
                 'plans' => $plans->values()->all(),
             ];
@@ -147,7 +161,9 @@ class BookingEngineRepository implements BookingEngineInterface
         $token = Str::random(48);
         $expiresAt = now()->addMinutes(BookingHold::TTL_MINUTES);
 
-        DB::transaction(function () use ($accommodation, $lines, $types, $checkin, $checkout, $adults, $children, $token, $expiresAt, $clientIp) {
+        $attribution = $this->attribution($stay);
+
+        DB::transaction(function () use ($accommodation, $lines, $types, $checkin, $checkout, $adults, $children, $token, $expiresAt, $clientIp, $attribution) {
             // Lock de los tipos: dos holds simultáneos no eligen las mismas. Todo o nada.
             Room::whereIn('room_type_id', $types->keys())->orderBy('id')->lockForUpdate()->get();
 
@@ -171,6 +187,7 @@ class BookingEngineRepository implements BookingEngineInterface
                 'currency' => $this->currency($accommodation),
                 'expires_at' => $expiresAt,
                 'client_ip' => $clientIp,
+                'attribution' => $attribution,
             ]);
 
             foreach ($assigned as $line) {
@@ -275,8 +292,11 @@ class BookingEngineRepository implements BookingEngineInterface
 
                 abort_if($locked->isExpired(), 410, 'El tiempo para completar la reserva venció.');
                 $this->guardPendingByEmail($accommodation, (string) $data['email']);
+                $this->applyOccupancy($locked, $data);
 
+                $extras = $this->chosenExtras($accommodation, $locked, $data['extras'] ?? []);
                 $reservations = $this->createReservations($accommodation, $locked, $data);
+                $this->attachExtras($reservations->first(), $extras);
                 $locked->update(['submitted_at' => now()]);
 
                 return $reservations;
@@ -292,6 +312,54 @@ class BookingEngineRepository implements BookingEngineInterface
         }
 
         return $this->summary($hold->refresh());
+    }
+
+    /**
+     * El huésped puede repartirse distinto de como lo hizo el hold (un adulto por habitación,
+     * llenando primero las grandes). Tiene que sumar lo mismo y entrar en cada habitación.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function applyOccupancy(BookingHold $hold, array $data): void
+    {
+        if (empty($data['occupancy'])) {
+            return;
+        }
+
+        $lines = $hold->rooms()->with('roomType')->orderBy('id')->get();
+        $occupancy = array_values($data['occupancy']);
+
+        abort_if(count($occupancy) !== $lines->count(), 422, 'El reparto de huéspedes no coincide con las habitaciones.');
+        abort_if(
+            array_sum(array_column($occupancy, 'adults')) !== $hold->adults
+            || array_sum(array_column($occupancy, 'children')) !== $hold->children,
+            422,
+            'El reparto tiene que sumar los mismos huéspedes de la búsqueda.',
+        );
+
+        foreach ($lines->values() as $i => $line) {
+            $adults = (int) $occupancy[$i]['adults'];
+            $children = (int) $occupancy[$i]['children'];
+            $max = (int) ($line->roomType?->max_occupancy ?? 0);
+
+            abort_if($max > 0 && $adults + $children > $max, 422, 'En la habitación '.($i + 1)." entran hasta {$max} personas.");
+
+            $line->update(['adults' => $adults, 'children' => $children]);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $stay
+     * @return array<string, string>|null
+     */
+    private function attribution(array $stay): ?array
+    {
+        $values = array_filter(
+            array_map(fn ($value) => is_string($value) ? trim($value) : null, $stay['attribution'] ?? []),
+            fn ($value) => $value !== null && $value !== '',
+        );
+
+        return $values === [] ? null : $values;
     }
 
     private function guardPendingByEmail(Accommodation $accommodation, string $email): void
@@ -320,17 +388,24 @@ class BookingEngineRepository implements BookingEngineInterface
             'last_name' => trim($data['last_name']),
             'email' => $data['email'],
             'phone' => trim($data['phone']),
+            'document_type' => $data['document_type'] ?? null,
+            'document_number' => isset($data['document_number']) ? trim($data['document_number']) : null,
+            'nationality' => isset($data['nationality']) ? strtoupper($data['nationality']) : null,
         ]);
+        $notes = BookingRequestDetails::notes($data);
 
         $nights = (int) $hold->checkin_date->diffInDays($hold->checkout_date);
         $groupId = (string) Str::uuid();
         $expiresAt = BookingDeadline::for($accommodation, $hold->checkin_date);
 
-        return $hold->rooms()->get()->map(function (BookingHoldRoom $line) use ($accommodation, $hold, $guest, $data, $nights, $groupId, $expiresAt) {
+        return $hold->rooms()->orderBy('id')->get()->map(function (BookingHoldRoom $line) use ($accommodation, $hold, $guest, $notes, $nights, $groupId, $expiresAt) {
             $reservation = new Reservation([
                 'accommodation_id' => $accommodation->id,
                 'guest_id' => $guest->id,
-                'room_id' => $line->room_id,
+                // Sin habitación: no bloquea nada hasta que el hotel la confirma, y dos
+                // solicitudes por la misma última habitación pueden convivir (el EXCLUDE
+                // de la base lo impediría con room_id). Se asigna al confirmar.
+                'room_id' => null,
                 'room_type_id' => $line->room_type_id,
                 'rate_plan_id' => $line->rate_plan_id,
                 'channel_id' => self::CHANNEL_ENGINE,
@@ -346,8 +421,9 @@ class BookingEngineRepository implements BookingEngineInterface
                 'rate_is_manual' => false,
                 'currency' => $hold->currency,
                 'guarantee_type' => 'none',
-                'special_requests' => $data['special_requests'] ?? null,
+                'special_requests' => $notes,
                 'booking_group_id' => $groupId,
+                'attribution' => $hold->attribution,
                 'request_expires_at' => $expiresAt,
             ]);
 
@@ -355,7 +431,6 @@ class BookingEngineRepository implements BookingEngineInterface
             $reservation->save();
             $reservation->travelers()->attach($guest->id, ['is_primary' => true]);
 
-            $this->reservations->adjustAvailability($line->room_type_id, $hold->checkin_date, $hold->checkout_date, -1);
             $line->update(['reservation_id' => $reservation->id]);
 
             return $reservation;
@@ -374,6 +449,12 @@ class BookingEngineRepository implements BookingEngineInterface
     /** @return list<string> */
     private function hotelRecipients(Accommodation $accommodation): array
     {
+        // Un solo aviso, al email del hotel; los usuarios del PMS ya lo ven en la campana.
+        // Sólo si el hotel no cargó email se avisa a los usuarios de la cuenta.
+        if (filter_var($accommodation->email, FILTER_VALIDATE_EMAIL) !== false) {
+            return [(string) $accommodation->email];
+        }
+
         $emails = $accommodation->account_id === null ? [] : User::query()
             ->where('user_type', User::TYPE_ACCOUNT)
             ->where('account_id', $accommodation->account_id)
@@ -381,9 +462,22 @@ class BookingEngineRepository implements BookingEngineInterface
                 ->orWhereHas('accommodations', fn ($a) => $a->where('accommodations.id', $accommodation->id)))
             ->pluck('email')->all();
 
-        return collect([$accommodation->email, ...$emails])
+        return collect($emails)
             ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
             ->unique()->values()->all();
+    }
+
+    public function releaseHold(Accommodation $accommodation, string $token): void
+    {
+        $hold = $this->findHold($accommodation, $token);
+
+        abort_if($hold->submitted_at !== null, 422, 'La solicitud ya fue enviada.');
+
+        // Vencerlo ya: deja de contar en la disponibilidad y en los topes por visitante.
+        if (! $hold->isExpired()) {
+            $hold->expires_at = now();
+            $hold->save();
+        }
     }
 
     private function findHold(Accommodation $accommodation, string $token): BookingHold
@@ -400,7 +494,7 @@ class BookingEngineRepository implements BookingEngineInterface
     /** @return array<string, mixed> */
     private function summary(BookingHold $hold): array
     {
-        $lines = $hold->rooms()->with(['roomType.descriptions', 'ratePlan', 'reservation'])->get();
+        $lines = $hold->rooms()->with(['roomType.descriptions', 'ratePlan', 'reservation'])->orderBy('id')->get();
         $first = $lines->first();
         $reservation = $first?->reservation;
 
@@ -415,6 +509,9 @@ class BookingEngineRepository implements BookingEngineInterface
             'room' => $first?->roomType?->spanishName() ?? 'Habitación',
             'plan' => $this->planSummary($first->ratePlan),
             'rooms' => $lines->map(fn (BookingHoldRoom $line) => [
+                // Para volver a la búsqueda con la misma elección.
+                'room_type_id' => $line->room_type_id,
+                'max_occupancy' => (int) ($line->roomType?->max_occupancy ?? 0),
                 'name' => $line->roomType?->spanishName() ?? 'Habitación',
                 'plan' => $this->planSummary($line->ratePlan),
                 'adults' => $line->adults,
@@ -426,7 +523,100 @@ class BookingEngineRepository implements BookingEngineInterface
             'currency' => $hold->currency,
             'confirmation_number' => $reservation?->confirmation_number,
             'request_expires_at' => $reservation?->request_expires_at?->toIso8601String(),
+            'attribution' => $hold->attribution,
+            'extras' => $hold->submitted_at === null ? $this->offeredExtras($hold, $lines) : [],
+            'chosen_extras' => $reservation ? $reservation->extras->map(fn (ReservationExtra $line) => [
+                'id' => $line->id,
+                'name' => $line->name,
+                'quantity' => $line->quantity,
+                'total' => $line->total_amount / 100,
+            ])->values()->all() : [],
+            'extras_total' => $reservation ? $reservation->extras->sum('total_amount') / 100 : 0,
         ];
+    }
+
+    /**
+     * Extras activos del hotel con el precio para esta estadía (por unidad elegida). El
+     * desayuno sale como incluido si alguna tarifa elegida ya lo trae: no se cobra dos veces.
+     *
+     * @param  Collection<int, BookingHoldRoom>  $lines
+     * @return array<int, array<string, mixed>>
+     */
+    private function offeredExtras(BookingHold $hold, Collection $lines): array
+    {
+        $nights = (int) $hold->checkin_date->diffInDays($hold->checkout_date);
+        $guests = (int) $hold->adults + (int) $hold->children;
+        $breakfastIncluded = $lines->contains(fn (BookingHoldRoom $line) => $line->ratePlan?->includesBreakfast() ?? false);
+
+        return Extra::where('accommodation_id', $hold->accommodation_id)
+            ->where('enabled', true)
+            ->orderBy('sort_order')->orderBy('id')
+            ->get()
+            ->map(function (Extra $extra) use ($nights, $guests, $breakfastIncluded) {
+                $units = Extra::unitsFor($extra->charge_mode, $nights, $guests);
+
+                return [
+                    'id' => $extra->id,
+                    'template' => $extra->template,
+                    'name' => $extra->name,
+                    'description' => $extra->description,
+                    'image_url' => $extra->image_url,
+                    'charge_mode' => $extra->charge_mode,
+                    'price' => $extra->price / 100,
+                    'units' => $units,
+                    // Precio de una unidad elegida para toda la estadía.
+                    'total' => $extra->price * $units / 100,
+                    'max_quantity' => $extra->max_quantity,
+                    'requires_confirmation' => $extra->requires_confirmation,
+                    'included' => $breakfastIncluded && $extra->template === Extra::TEMPLATE_BREAKFAST,
+                ];
+            })->values()->all();
+    }
+
+    /**
+     * Lo que pidió el huésped, contra lo que el hotel ofrece hoy. El precio sale de acá,
+     * nunca del motor.
+     *
+     * @param  array<int, array{id: int, quantity: int}>  $requested
+     * @return array<int, array<string, mixed>>
+     */
+    private function chosenExtras(Accommodation $accommodation, BookingHold $hold, array $requested): array
+    {
+        if ($requested === []) {
+            return [];
+        }
+
+        $offered = collect($this->offeredExtras($hold, $hold->rooms()->with('ratePlan')->get()))->keyBy('id');
+
+        return collect($requested)->map(function (array $item) use ($offered) {
+            $extra = $offered->get((int) $item['id']);
+            $quantity = (int) $item['quantity'];
+
+            abort_if($extra === null || $extra['included'], 422, 'Uno de los extras ya no está disponible. Volvé a elegirlos.');
+            abort_if($quantity > $extra['max_quantity'], 422, "De {$extra['name']} podés pedir hasta {$extra['max_quantity']}.");
+
+            $unitPrice = (int) round($extra['price'] * 100);
+
+            return [
+                'extra_id' => $extra['id'],
+                'template' => $extra['template'],
+                'name' => $extra['name'],
+                'charge_mode' => $extra['charge_mode'],
+                'unit_price' => $unitPrice,
+                'quantity' => $quantity,
+                'units' => $extra['units'],
+                'total_amount' => $unitPrice * $extra['units'] * $quantity,
+                'requires_confirmation' => $extra['requires_confirmation'],
+            ];
+        })->values()->all();
+    }
+
+    /** @param  array<int, array<string, mixed>>  $extras */
+    private function attachExtras(?Reservation $reservation, array $extras): void
+    {
+        foreach ($extras as $line) {
+            $reservation?->extras()->create($line);
+        }
     }
 
     /** @return array{id: int, name: string, cancellation: ?string, meal_plan: ?string} */

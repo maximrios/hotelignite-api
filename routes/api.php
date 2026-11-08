@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\Admin\V1\AccommodationChannelController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationDocumentController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationImageController;
+use App\Http\Controllers\Api\Admin\V1\RoomTypeImageController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationNearbyEventController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationNearbyPointController;
 use App\Http\Controllers\Api\Admin\V1\AccommodationServiceController;
@@ -78,6 +79,7 @@ use App\Http\Controllers\Api\V1\RatePlanController;
 use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\RoomAvailabilityController;
 use App\Http\Controllers\Api\V1\RoomController;
+use App\Http\Controllers\Api\V1\ExtraController;
 use App\Http\Controllers\Api\V1\RoomTypeBedController;
 use App\Http\Controllers\Api\V1\RoomTypeController;
 use App\Http\Controllers\Api\V1\RoomTypeDescriptionController;
@@ -342,6 +344,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
             Route::put('accommodations/{accommodation}/images/{image}', [AccommodationImageController::class, 'update'])->name('admin.accommodations.images.update');
             Route::delete('accommodations/{accommodation}/images/{image}', [AccommodationImageController::class, 'destroy'])->name('admin.accommodations.images.destroy');
 
+            // Fotos de cada tipo de habitación (las tarjetas del motor de reservas).
+            Route::get('accommodations/{accommodation}/room-types/{roomType}/images', [RoomTypeImageController::class, 'index'])->whereNumber('roomType')->name('admin.accommodations.room-types.images.index');
+            Route::post('accommodations/{accommodation}/room-types/{roomType}/images', [RoomTypeImageController::class, 'store'])->whereNumber('roomType')->name('admin.accommodations.room-types.images.store');
+            Route::patch('accommodations/{accommodation}/room-types/{roomType}/images/reorder', [RoomTypeImageController::class, 'reorder'])->whereNumber('roomType')->name('admin.accommodations.room-types.images.reorder');
+            Route::put('accommodations/{accommodation}/room-types/{roomType}/images/{image}', [RoomTypeImageController::class, 'update'])->whereNumber('roomType')->name('admin.accommodations.room-types.images.update');
+            Route::delete('accommodations/{accommodation}/room-types/{roomType}/images/{image}', [RoomTypeImageController::class, 'destroy'])->whereNumber('roomType')->name('admin.accommodations.room-types.images.destroy');
+
             // Legajo del alojamiento (lado dueño). Ver docs/documents-plan.md §8.
             Route::get('document-types', [DocumentTypeController::class, 'index'])->name('admin.document-types.index');
             Route::get('accommodations/{accommodation}/documents', [AccommodationDocumentController::class, 'index'])->name('admin.accommodations.documents.index');
@@ -604,6 +613,13 @@ Route::middleware(['auth:sanctum', 'throttle:api', 'client.readonly'])->group(fu
         Route::post('pricing/plans', [PricingController::class, 'storePlan'])->name('pricing.plans.store');
         Route::put('pricing/plans/{id}', [PricingController::class, 'updatePlan'])->whereNumber('id')->name('pricing.plans.update');
         Route::delete('pricing/plans/{id}', [PricingController::class, 'destroyPlan'])->whereNumber('id')->name('pricing.plans.destroy');
+
+        // Extras vendibles del alojamiento (Tarifas → Extras) y su baja en una reserva.
+        Route::get('extras', [ExtraController::class, 'index'])->name('extras.index');
+        Route::post('extras', [ExtraController::class, 'store'])->name('extras.store');
+        Route::put('extras/{id}', [ExtraController::class, 'update'])->whereNumber('id')->name('extras.update');
+        Route::delete('extras/{id}', [ExtraController::class, 'destroy'])->whereNumber('id')->name('extras.destroy');
+        Route::delete('reservations/{id}/extras/{line}', [ExtraController::class, 'removeFromReservation'])->whereUuid('id')->whereNumber('line')->name('reservations.extras.destroy');
 
         // Housekeeping del PMS: tablero del día, tareas, personal sin login e historial.
         Route::get('housekeeping', [HousekeepingController::class, 'board'])->name('housekeeping.board');
